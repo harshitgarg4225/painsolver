@@ -1,0 +1,264 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PainSolver Developer Docs</title>
+    <link rel="stylesheet" href="/docs-assets/docs.css" />
+  </head>
+  <body>
+    <header class="docs-header">
+      <div class="brand">
+        <div class="logo" aria-hidden="true"></div>
+        <div>
+          <h1>PainSolver Docs</h1>
+          <p>Canny-compatible install surface with AI-native extensions.</p>
+        </div>
+      </div>
+      <div class="header-actions">
+        <a class="btn ghost" href="/install">Quick Install</a>
+        <a class="btn" href="/portal">Live Portal</a>
+        <a class="btn" href="/company">Company Studio</a>
+      </div>
+    </header>
+
+    <main class="docs-layout">
+      <aside class="docs-nav">
+        <label class="nav-search-wrap" for="doc-search">
+          <span>Search</span>
+          <input id="doc-search" type="search" placeholder="Find section..." />
+        </label>
+        <nav id="doc-nav-list" aria-label="Docs sections">
+          <a href="#install">Install</a>
+          <a href="#identify">Identify</a>
+          <a href="#company-data">Company Data</a>
+          <a href="#custom-fields">Custom Fields</a>
+          <a href="#security">Security</a>
+          <a href="#advanced-identify">Advanced Identify</a>
+          <a href="#feedback-widget">Feedback Widget</a>
+          <a href="#mobile-widget">Mobile Widget</a>
+          <a href="#sso-widget">Widget SSO</a>
+          <a href="#feedback-advanced">Widget Advanced</a>
+          <a href="#changelog-widget">Changelog Widget</a>
+          <a href="#changelog-customize">Changelog Customization</a>
+          <a href="#changelog-privacy">Changelog Privacy</a>
+          <a href="#api-map">API Mapping</a>
+        </nav>
+      </aside>
+
+      <article class="docs-content" id="docs-content">
+        <section id="install" data-title="Install">
+          <h2>Install</h2>
+          <p>
+            Include the PainSolver SDK and initialize once with your API base URL and board scope token.
+          </p>
+          <pre><button class="copy-btn" type="button">Copy</button><code>&lt;script src="https://painsolver.vercel.app/sdk/painsolver.js"&gt;&lt;/script&gt;
+&lt;div id="painsolver-board"&gt;&lt;/div&gt;
+&lt;div id="painsolver-changelog"&gt;&lt;/div&gt;
+&lt;script&gt;
+  PainSolver("init", {
+    apiBaseUrl: "https://painsolver.vercel.app",
+    boardToken: "SERVER_GENERATED_BOARD_TOKEN"
+  });
+
+  PainSolver("identify", {
+    user: { email: "user@example.com", name: "User", appUserId: "u_1" },
+    company: { name: "Acme", monthlySpend: 499 },
+    hash: "SERVER_GENERATED_HMAC_SHA256"
+  }).then(function () {
+    PainSolver("render", { selector: "#painsolver-board" });
+    PainSolver("initChangelog", { selector: "#painsolver-changelog" });
+  });
+&lt;/script&gt;</code></pre>
+        </section>
+
+        <section id="identify" data-title="Identify">
+          <h2>Identify</h2>
+          <p>
+            Identify binds the visitor to a PainSolver user and company. This enables voting, changelog seen-state,
+            and request attribution.
+          </p>
+          <pre><button class="copy-btn" type="button">Copy</button><code>PainSolver("identify", {
+  user: {
+    email: "pm@acme.com",
+    name: "Product Manager",
+    appUserId: "pm_42"
+  },
+  company: {
+    name: "Acme",
+    monthlySpend: 1200,
+    healthStatus: "healthy",
+    stripeCustomerId: "cus_123"
+  },
+  hash: "HMAC_SHA256_FROM_YOUR_BACKEND"
+});</code></pre>
+        </section>
+
+        <section id="company-data" data-title="Company Data">
+          <h2>Company Data</h2>
+          <p>
+            Company data drives MRR-aware prioritization. Keep <code>monthlySpend</code> current to improve roadmap scoring.
+          </p>
+          <ul>
+            <li>Single company: pass <code>company</code> in <code>identify</code>.</li>
+            <li>Multiple company support payload shape is accepted and can be expanded in your backend integration.</li>
+          </ul>
+        </section>
+
+        <section id="custom-fields" data-title="Custom Fields">
+          <h2>Custom Fields</h2>
+          <p>
+            SDK accepts passthrough custom fields on user/company payloads. You can store these in your identity service,
+            and map them to board access logic or analytics.
+          </p>
+          <pre><button class="copy-btn" type="button">Copy</button><code>user: {
+  email: "ops@acme.com",
+  customFields: {
+    planTier: "enterprise",
+    region: "us-east"
+  }
+},
+company: {
+  name: "Acme",
+  customFields: {
+    segment: "agency",
+    arrBand: "50k-100k"
+  }
+}</code></pre>
+        </section>
+
+        <section id="security" data-title="Security">
+          <h2>Security</h2>
+          <p>
+            PainSolver supports both HMAC identify and signed short-lived tokens.
+          </p>
+          <ul>
+            <li><strong>Identify hash:</strong> <code>POST /api/v1/sdk/identify</code> validates HMAC via <code>PAINSOLVER_CLIENT_SECRET</code>.</li>
+            <li><strong>Board token:</strong> scope widget/changelog access to specific board(s).</li>
+            <li><strong>SSO token:</strong> avoid exposing identity secrets in browser.</li>
+          </ul>
+        </section>
+
+        <section id="advanced-identify" data-title="Advanced Identify">
+          <h2>Advanced Identify</h2>
+          <p>Use token-first flows for private boards and embedded environments.</p>
+          <pre><button class="copy-btn" type="button">Copy</button><code>// Backend (server-to-server): create SSO token
+POST /api/v1/sdk/sso-token
+Authorization: Bearer &lt;API_KEY&gt;
+{
+  "user": { "email": "user@acme.com", "name": "User" },
+  "company": { "name": "Acme", "monthlySpend": 900 },
+  "expiresInSeconds": 3600
+}
+
+// Frontend: authenticate with ssoToken
+PainSolver("authenticate", { ssoToken: "..." });</code></pre>
+        </section>
+
+        <section id="feedback-widget" data-title="Feedback Widget">
+          <h2>Feedback Widget</h2>
+          <p>Render the embeddable feedback list with board scoping and upvote actions.</p>
+          <pre><button class="copy-btn" type="button">Copy</button><code>PainSolver("render", {
+  selector: "#painsolver-board",
+  query: "comments sync"
+});</code></pre>
+        </section>
+
+        <section id="mobile-widget" data-title="Mobile Widget">
+          <h2>Mobile Widget</h2>
+          <p>
+            For mobile apps, host a lightweight webview page that includes the same SDK snippet. Pass
+            <code>ssoToken</code> and <code>boardToken</code> through query params generated by your backend.
+          </p>
+        </section>
+
+        <section id="sso-widget" data-title="Widget SSO">
+          <h2>Widget SSO</h2>
+          <p>
+            To avoid browser-side HMAC generation, use short-lived SSO tokens.
+          </p>
+          <pre><button class="copy-btn" type="button">Copy</button><code>PainSolver("init", {
+  apiBaseUrl: "https://painsolver.vercel.app",
+  boardToken: "...",
+  ssoToken: "..."
+});
+
+PainSolver("authenticate", { ssoToken: "..." })
+  .then(function () {
+    return PainSolver("render", { selector: "#painsolver-board" });
+  });</code></pre>
+        </section>
+
+        <section id="feedback-advanced" data-title="Widget Advanced">
+          <h2>Widget Advanced</h2>
+          <ul>
+            <li><code>onLoadCallback</code> in <code>init</code> for instrumentation.</li>
+            <li><code>boardToken</code> to enforce private board scope.</li>
+            <li><code>hasUnseenEntries</code> to drive badges and notification dots.</li>
+          </ul>
+          <pre><button class="copy-btn" type="button">Copy</button><code>PainSolver("init", {
+  apiBaseUrl: "https://painsolver.vercel.app",
+  boardToken: "...",
+  onLoadCallback: function (event) {
+    console.log("PainSolver loaded", event.type, event.count);
+  }
+});</code></pre>
+        </section>
+
+        <section id="changelog-widget" data-title="Changelog Widget">
+          <h2>Changelog Widget</h2>
+          <p>Render release updates and track per-user seen status.</p>
+          <pre><button class="copy-btn" type="button">Copy</button><code>PainSolver("initChangelog", {
+  selector: "#painsolver-changelog",
+  limit: 10
+});
+
+PainSolver("hasUnseenEntries", {
+  callback: function (hasUnseen, meta) {
+    console.log("Unseen?", hasUnseen, meta.unseenCount);
+  }
+});</code></pre>
+        </section>
+
+        <section id="changelog-customize" data-title="Changelog Customization">
+          <h2>Changelog Customization</h2>
+          <p>
+            Use CSS overrides scoped to <code>.ps-root</code> to match your app design. You can also render your own shell
+            and call SDK APIs directly.
+          </p>
+        </section>
+
+        <section id="changelog-privacy" data-title="Changelog Privacy">
+          <h2>Changelog Privacy</h2>
+          <p>
+            Use board tokens for private release channels. Without a valid token, private board changelog entries are not returned.
+          </p>
+        </section>
+
+        <section id="api-map" data-title="API Mapping">
+          <h2>API Mapping (Canny -> PainSolver)</h2>
+          <table>
+            <thead>
+              <tr>
+                <th>Canny Concept</th>
+                <th>PainSolver Equivalent</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td>Install script</td><td><code>/sdk/painsolver.js</code></td></tr>
+              <tr><td>Identify</td><td><code>PainSolver("identify", ...)</code> + <code>/api/v1/sdk/identify</code></td></tr>
+              <tr><td>Secure mode hash</td><td>HMAC via <code>PAINSOLVER_CLIENT_SECRET</code></td></tr>
+              <tr><td>Private board token</td><td><code>/api/v1/sdk/board-token</code></td></tr>
+              <tr><td>SSO token</td><td><code>/api/v1/sdk/sso-token</code> + <code>authenticate</code></td></tr>
+              <tr><td>Feedback widget</td><td><code>PainSolver("render", ...)</code></td></tr>
+              <tr><td>Changelog widget</td><td><code>PainSolver("initChangelog", ...)</code></td></tr>
+              <tr><td>Unseen changelog badge</td><td><code>PainSolver("hasUnseenEntries", ...)</code></td></tr>
+            </tbody>
+          </table>
+        </section>
+      </article>
+    </main>
+
+    <script src="/docs-assets/docs.js"></script>
+  </body>
+</html>

@@ -83,15 +83,16 @@ app.get("/install", (req, res) => {
     apiBaseUrl: "${host}",
     boardToken: "SERVER_GENERATED_BOARD_TOKEN"
   });
-  PainSolver("identify", {
-    user: { email: "user@example.com", name: "User", appUserId: "u_1" },
-    company: { name: "acme" },
-    hash: "SERVER_GENERATED_HMAC_SHA256"
-  }).then(function () {
-    PainSolver("render", { selector: "#painsolver-board" });
-    PainSolver("initChangelog", { selector: "#painsolver-changelog" });
-  });
+    PainSolver("identify", {
+      user: { email: "user@example.com", name: "User", appUserId: "u_1" },
+      company: { name: "acme" },
+      hash: "SERVER_GENERATED_HMAC_SHA256"
+    }).then(function () {
+      PainSolver("render", { selector: "#painsolver-board" });
+      PainSolver("initChangelog", { selector: "#painsolver-changelog" });
+    });
 &lt;/script&gt;</pre>
+    <p><a href="/docs">Open Developer Docs</a></p>
     <p><a href="/portal">Open Customer Portal</a></p>
     <p><a href="/company">Open Company Dashboard</a></p>
   </body>
@@ -108,6 +109,12 @@ app.use("/portal-assets", express.static(path.resolve(process.cwd(), "src/public
 app.get("/portal", (_req, res) => {
   const portalPath = path.resolve(process.cwd(), "src/public/portal/index.html");
   res.sendFile(portalPath);
+});
+
+app.use("/docs-assets", express.static(path.resolve(process.cwd(), "src/public/docs")));
+app.get("/docs", (_req, res) => {
+  const docsPath = path.resolve(process.cwd(), "src/public/docs/index.html");
+  res.sendFile(docsPath);
 });
 
 app.use("/company-assets", express.static(path.resolve(process.cwd(), "src/public/company")));

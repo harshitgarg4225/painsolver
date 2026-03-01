@@ -21,6 +21,7 @@ Open:
 - Customer portal: `http://localhost:3000/portal`
 - Company dashboard: `http://localhost:3000/company`
 - SDK installer: `http://localhost:3000/install`
+- Developer docs UI: `http://localhost:3000/docs`
 
 ## Deploy (Vercel + Supabase)
 1. Create a Supabase project and copy the Postgres connection string.
