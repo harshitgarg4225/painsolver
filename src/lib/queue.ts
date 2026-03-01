@@ -17,7 +17,20 @@ class NoopQueue implements AiProcessingQueue {
   }
 }
 
-export const aiProcessingQueue: AiProcessingQueue = env.DEMO_MODE
+function shouldUseNoopQueue(): boolean {
+  if (env.DEMO_MODE) {
+    return true;
+  }
+
+  // Vercel functions cannot access local Redis endpoints.
+  if (process.env.VERCEL && /(localhost|127\.0\.0\.1)/i.test(env.REDIS_URL)) {
+    return true;
+  }
+
+  return false;
+}
+
+export const aiProcessingQueue: AiProcessingQueue = shouldUseNoopQueue()
   ? new NoopQueue()
   : new Queue(AI_PROCESSING_QUEUE_NAME, {
       connection: { url: env.REDIS_URL },
