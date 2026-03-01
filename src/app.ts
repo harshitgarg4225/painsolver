@@ -48,6 +48,10 @@ app.get("/health", (_req, res) => {
   res.status(200).json({ ok: true });
 });
 
+app.get("/", (_req, res) => {
+  res.redirect(302, "/portal");
+});
+
 app.get("/sdk/painsolver.js", (_req, res) => {
   const sdkFilePath = path.resolve(process.cwd(), "src/sdk/painsolver.js");
   res.sendFile(sdkFilePath);
