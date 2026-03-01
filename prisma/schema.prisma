@@ -1,0 +1,365 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [pgvector(map: "vector")]
+}
+
+enum VoteType {
+  implicit
+  explicit
+}
+
+enum PostStatus {
+  under_review
+  upcoming
+  backlog
+  planned
+  in_progress
+  complete
+  shipped
+}
+
+enum UserRole {
+  customer
+  member
+  admin
+}
+
+enum BoardVisibility {
+  public
+  private
+  custom
+}
+
+enum PainEventSource {
+  freshdesk
+  zoom
+}
+
+enum PainEventStatus {
+  pending_ai
+  needs_triage
+  auto_merged
+}
+
+enum AiActionTaken {
+  auto_upvote
+  suggested_new
+}
+
+enum AiActionStatus {
+  approved
+  pending_review
+  revoked
+}
+
+enum AccessRequestStatus {
+  pending
+  approved
+  rejected
+}
+
+enum NotificationType {
+  status_change
+  comment_reply
+  mention
+  access_approved
+  announcement
+}
+
+enum AiInboxRoutingMode {
+  central
+  individual
+}
+
+model Company {
+  id               String   @id @default(cuid())
+  name             String
+  monthlySpend     Float    @default(0)
+  healthStatus     String   @default("unknown")
+  stripeCustomerId String?  @unique
+  users            User[]
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@unique([name])
+}
+
+model User {
+  id                   String                  @id @default(cuid())
+  companyId            String
+  email                String                  @unique
+  name                 String                  @default("")
+  appUserId            String?                 @unique
+  hmacHash             String                  @default("")
+  role                 UserRole                @default(customer)
+  segments             String[]                @default([])
+  company              Company                 @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  votes                Vote[]
+  painEvents           PainEvent[]
+  comments             Comment[]               @relation("CommentAuthor")
+  accessRequests       AccessRequest[]
+  notifications        Notification[]
+  notificationPref     NotificationPreference?
+  savedFilters         SavedFilter[]
+  zoomConnection       ZoomConnection?
+  createdAt            DateTime                @default(now())
+  updatedAt            DateTime                @updatedAt
+}
+
+model Board {
+  id              String          @id @default(cuid())
+  name            String
+  isPrivate       Boolean         @default(false)
+  visibility      BoardVisibility @default(public)
+  allowedSegments String[]        @default([])
+  categories      Category[]
+  posts           Post[]
+  accessRequests  AccessRequest[]
+  notifications   Notification[]
+  changelog       ChangelogEntry[]
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  @@unique([name])
+}
+
+model Category {
+  id        String   @id @default(cuid())
+  boardId   String
+  name      String
+  board     Board    @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  posts     Post[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([boardId, name])
+}
+
+model Post {
+  id                String            @id @default(cuid())
+  boardId           String
+  categoryId        String
+  title             String
+  description       String            @default("")
+  status            PostStatus        @default(under_review)
+  ownerName         String            @default("Unassigned")
+  eta               DateTime?
+  tags              String[]          @default([])
+  score             Int               @default(0)
+  totalAttachedMrr  Float             @default(0)
+  implicitVoteCount Int               @default(0)
+  explicitVoteCount Int               @default(0)
+  embedding         Unsupported("vector(1536)")?
+  mergedIntoPostId  String?
+  board             Board             @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  category          Category          @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  votes             Vote[]
+  comments          Comment[]
+  changelogEntries  ChangelogEntry[]
+  matchedPainEvents PainEvent[]       @relation("MatchedPostPainEvents")
+  mergedIntoPost    Post?             @relation("PostMerge", fields: [mergedIntoPostId], references: [id], onDelete: SetNull)
+  mergedSourcePosts Post[]            @relation("PostMerge")
+  notifications     Notification[]
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  @@index([boardId])
+  @@index([categoryId])
+  @@index([totalAttachedMrr])
+  @@index([mergedIntoPostId])
+}
+
+model Vote {
+  id            String      @id @default(cuid())
+  userId        String
+  postId        String
+  voteType      VoteType
+  aiActionLogId String?
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  post          Post        @relation(fields: [postId], references: [id], onDelete: Cascade)
+  aiActionLog   AiActionLog? @relation(fields: [aiActionLogId], references: [id], onDelete: SetNull)
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  @@unique([userId, postId])
+  @@index([postId, voteType])
+}
+
+model PainEvent {
+  id                String          @id @default(cuid())
+  userId            String
+  source            PainEventSource
+  sourceReferenceId String
+  rawText           String          @db.Text
+  status            PainEventStatus @default(pending_ai)
+  matchedPostId     String?
+  user              User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  matchedPost       Post?           @relation("MatchedPostPainEvents", fields: [matchedPostId], references: [id], onDelete: SetNull)
+  aiActionLog       AiActionLog?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  @@unique([source, sourceReferenceId])
+  @@index([status])
+  @@index([matchedPostId])
+}
+
+model AiActionLog {
+  id              String        @id @default(cuid())
+  painEventId     String        @unique
+  actionTaken     AiActionTaken
+  confidenceScore Float
+  status          AiActionStatus
+  painEvent       PainEvent     @relation(fields: [painEventId], references: [id], onDelete: Cascade)
+  votes           Vote[]
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+}
+
+model Comment {
+  id               String    @id @default(cuid())
+  postId           String
+  authorId         String
+  value            String    @db.Text
+  isPrivate        Boolean   @default(false)
+  replyToCommentId String?
+  post             Post      @relation(fields: [postId], references: [id], onDelete: Cascade)
+  author           User      @relation("CommentAuthor", fields: [authorId], references: [id], onDelete: Restrict)
+  replyToComment   Comment?  @relation("CommentReplies", fields: [replyToCommentId], references: [id], onDelete: SetNull)
+  replies          Comment[] @relation("CommentReplies")
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@index([postId])
+  @@index([authorId])
+  @@index([replyToCommentId])
+}
+
+model ChangelogEntry {
+  id          String   @id @default(cuid())
+  postId      String?
+  boardId     String?
+  title       String
+  content     String   @db.Text
+  tags        String[] @default([])
+  isPublished Boolean  @default(false)
+  publishedAt DateTime?
+  post        Post?    @relation(fields: [postId], references: [id], onDelete: Cascade)
+  board       Board?   @relation(fields: [boardId], references: [id], onDelete: SetNull)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([postId])
+  @@index([boardId])
+  @@index([isPublished])
+}
+
+model ApiCredential {
+  id        String   @id @default(cuid())
+  name      String
+  keyHash   String   @unique
+  isActive  Boolean  @default(true)
+  scopes    Json?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model AccessRequest {
+  id        String              @id @default(cuid())
+  userId    String
+  boardId   String
+  reason    String
+  status    AccessRequestStatus @default(pending)
+  user      User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  board     Board               @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  createdAt DateTime            @default(now())
+  updatedAt DateTime            @updatedAt
+
+  @@index([userId, boardId])
+  @@index([status])
+}
+
+model NotificationPreference {
+  id             String   @id @default(cuid())
+  userId         String   @unique
+  productUpdates Boolean  @default(true)
+  commentReplies Boolean  @default(true)
+  mentions       Boolean  @default(true)
+  weeklyDigest   Boolean  @default(true)
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String
+  boardId   String
+  postId    String?
+  type      NotificationType
+  title     String
+  body      String
+  readAt    DateTime?
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  board     Board            @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  post      Post?            @relation(fields: [postId], references: [id], onDelete: SetNull)
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  @@index([userId, createdAt])
+  @@index([readAt])
+}
+
+model SavedFilter {
+  id        String   @id @default(cuid())
+  userId    String
+  name      String
+  criteria  Json
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId, createdAt])
+}
+
+model AiInboxConfig {
+  id                       String            @id @default(cuid())
+  source                   PainEventSource   @unique
+  routingMode              AiInboxRoutingMode
+  enabled                  Boolean           @default(true)
+  freshdeskDomain          String?
+  freshdeskApiKey          String?           @db.Text
+  freshdeskFilterField     String?
+  freshdeskFilterValue     String?
+  freshdeskFieldCatalog    Json?
+  freshdeskLastFieldSyncAt DateTime?
+  freshdeskLastTicketSyncAt DateTime?
+  createdAt                DateTime          @default(now())
+  updatedAt                DateTime          @updatedAt
+}
+
+model ZoomConnection {
+  id             String   @id @default(cuid())
+  userId         String   @unique
+  zoomUserId     String
+  zoomAccountId  String?
+  zoomUserEmail  String?
+  accessToken    String   @db.Text
+  refreshToken   String   @db.Text
+  tokenType      String   @default("bearer")
+  scope          String?
+  expiresAt      DateTime?
+  connectedAt    DateTime @default(now())
+  lastSyncedAt   DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([zoomUserId])
+}

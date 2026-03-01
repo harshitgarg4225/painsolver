@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PainSolver Portal</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:FILL@0" rel="stylesheet" />
+    <link rel="stylesheet" href="/portal-assets/portal.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand">
+        <div class="logo">P</div>
+        <strong>PainSolver</strong>
+      </div>
+
+      <nav class="tabs" id="tabs">
+        <button class="tab is-active" data-tab="feedback" type="button">
+          <span class="ms">forum</span>
+          <span>Feedback</span>
+        </button>
+        <button class="tab" data-tab="roadmap" type="button">
+          <span class="ms">route</span>
+          <span>Roadmap</span>
+        </button>
+        <button class="tab" data-tab="changelog" type="button">
+          <span class="ms">article</span>
+          <span>Changelog</span>
+        </button>
+        <button class="tab" data-tab="notifications" type="button">
+          <span class="ms">notifications</span>
+          Notifications
+          <span id="notify-count-pill" class="notify-pill hidden">0</span>
+        </button>
+      </nav>
+
+      <button id="login-btn" class="primary" type="button">Log in</button>
+    </header>
+
+    <main>
+      <section id="feedback-page" class="page is-active">
+        <header class="page-head">
+          <h1>Customer Feedback</h1>
+          <p>Browse ideas by board, vote, and join discussions in a single view.</p>
+        </header>
+        <div class="layout">
+          <aside class="sidebar">
+            <article class="card login-card">
+              <h2 id="access-title">Read-only access</h2>
+              <p id="access-copy">Login to upvote and create new feedback posts.</p>
+              <p id="session-meta" class="session-meta">No SSO session</p>
+              <button id="request-access-btn" class="ghost" type="button">Request Access</button>
+            </article>
+
+            <article class="card">
+              <h3>Boards</h3>
+              <div id="board-list" class="board-list"></div>
+            </article>
+          </aside>
+
+          <section class="content">
+            <article class="card composer">
+              <h2 id="composer-board-name">Feedback</h2>
+              <input id="new-title" type="text" placeholder="Short, descriptive title" />
+              <textarea id="new-details" rows="3" placeholder="Any additional details..."></textarea>
+              <div class="composer-actions">
+                <button id="clear-new-post" class="ghost" type="button">Cancel</button>
+                <button id="create-post" class="primary" type="button">Create Post</button>
+              </div>
+            </article>
+
+            <article class="card">
+              <div class="toolbar">
+                <div class="sort-filter-wrap">
+                  <button id="sort-filter-btn" class="ghost" type="button">Showing Trending</button>
+                  <div id="sort-filter-menu" class="menu hidden">
+                    <div class="menu-col">
+                      <h4>Sort</h4>
+                      <button data-sort="trending" type="button">Trending</button>
+                      <button data-sort="top" type="button">Top</button>
+                      <button data-sort="new" type="button">New</button>
+                    </div>
+                    <div class="menu-col">
+                      <h4>Filter</h4>
+                      <button data-filter="under_review" type="button">Under Review</button>
+                      <button data-filter="upcoming" type="button">Upcoming</button>
+                      <button data-filter="planned" type="button">Planned</button>
+                      <button data-filter="in_progress" type="button">In Progress</button>
+                      <button data-filter="complete" type="button">Complete</button>
+                      <button data-filter="all" type="button">All</button>
+                    </div>
+                  </div>
+                </div>
+
+                <input id="search-input" type="search" placeholder="Search..." />
+              </div>
+              <div id="status-filter-chips" class="status-filter-chips">
+                <button type="button" data-filter-chip="all" class="chip is-active">All</button>
+                <button type="button" data-filter-chip="under_review" class="chip">Under Review</button>
+                <button type="button" data-filter-chip="upcoming" class="chip">Upcoming</button>
+                <button type="button" data-filter-chip="planned" class="chip">Planned</button>
+                <button type="button" data-filter-chip="in_progress" class="chip">In Progress</button>
+                <button type="button" data-filter-chip="complete" class="chip">Complete</button>
+              </div>
+
+              <div id="feedback-list" class="feedback-list"></div>
+            </article>
+          </section>
+        </div>
+      </section>
+
+      <section id="roadmap-page" class="page">
+        <header class="page-head">
+          <h1>Roadmap</h1>
+          <p>What is planned, in progress, and shipped for your selected board.</p>
+        </header>
+        <div class="roadmap-head">
+          <h2>Roadmap Board</h2>
+          <p>What we are planning, building, and shipping.</p>
+        </div>
+        <div class="roadmap-grid">
+          <article class="card">
+            <h3>Planned</h3>
+            <div id="roadmap-planned" class="roadmap-col"></div>
+          </article>
+          <article class="card">
+            <h3>In Progress</h3>
+            <div id="roadmap-progress" class="roadmap-col"></div>
+          </article>
+          <article class="card">
+            <h3>Complete</h3>
+            <div id="roadmap-complete" class="roadmap-col"></div>
+          </article>
+        </div>
+      </section>
+
+      <section id="changelog-page" class="page">
+        <header class="page-head">
+          <h1>Changelog</h1>
+          <p>Track releases and search past updates quickly.</p>
+        </header>
+        <article class="card changelog-head">
+          <h2>Release Feed</h2>
+          <p>Follow up on the latest improvements and updates.</p>
+          <input id="changelog-search" type="search" placeholder="Search entries..." />
+        </article>
+        <div id="changelog-list" class="changelog-list"></div>
+      </section>
+
+      <section id="notifications-page" class="page">
+        <header class="page-head">
+          <h1>Notifications</h1>
+          <p>Control alerts for replies, mentions, and product changes.</p>
+        </header>
+        <article class="card changelog-head">
+          <h2>Notification Center</h2>
+          <p>Control alerts and review product updates, replies, mentions, and access changes.</p>
+        </article>
+        <article class="card notification-preferences">
+          <h3>Notification Preferences</h3>
+          <div class="pref-grid">
+            <label><input id="pref-product-updates" type="checkbox" /> Product updates</label>
+            <label><input id="pref-comment-replies" type="checkbox" /> Comment replies</label>
+            <label><input id="pref-mentions" type="checkbox" /> Mentions</label>
+            <label><input id="pref-weekly-digest" type="checkbox" /> Weekly digest</label>
+          </div>
+          <div class="composer-actions">
+            <button id="save-notification-prefs" class="primary" type="button">Save Preferences</button>
+            <button id="mark-all-read" class="ghost" type="button">Mark All Read</button>
+          </div>
+        </article>
+        <div id="notification-list" class="changelog-list"></div>
+      </section>
+    </main>
+
+    <script src="/portal-assets/portal.js"></script>
+  </body>
+</html>

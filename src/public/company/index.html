@@ -1,0 +1,541 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PainSolver Company Studio</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:FILL@0" rel="stylesheet" />
+    <link rel="stylesheet" href="/company-assets/company.css" />
+  </head>
+  <body>
+    <header class="studio-topbar">
+      <div class="brand-block">
+        <div class="brand-mark">
+          <span></span>
+        </div>
+        <div>
+          <strong>PainSolver Studio</strong>
+          <small>Company Workspace</small>
+        </div>
+      </div>
+
+      <nav class="top-nav" id="company-nav">
+        <button class="nav-item is-active" data-tab="feedback" type="button">
+          <span class="ms">forum</span>
+          <span>Feedback</span>
+        </button>
+        <button class="nav-item" data-tab="roadmap" type="button">
+          <span class="ms">route</span>
+          <span>Roadmap</span>
+        </button>
+        <button class="nav-item" data-tab="access" type="button">
+          <span class="ms">admin_panel_settings</span>
+          <span>Access</span>
+        </button>
+        <button class="nav-item" data-tab="changelog" type="button">
+          <span class="ms">article</span>
+          <span>Changelog</span>
+        </button>
+        <button class="nav-item" data-tab="autopilot" type="button">
+          <span class="ms">auto_awesome</span>
+          <span>AI Inbox</span>
+        </button>
+        <button class="nav-item" data-tab="reporting" type="button">
+          <span class="ms">analytics</span>
+          <span>Reporting</span>
+        </button>
+      </nav>
+
+      <div class="top-actions">
+        <button id="open-composer" class="ghost action-btn" type="button">
+          <span class="ms">add</span>
+          <span>New Post</span>
+        </button>
+        <button class="avatar" type="button">A</button>
+      </div>
+    </header>
+
+    <main>
+      <section id="company-feedback" class="company-page is-active">
+        <header class="page-head">
+          <h1>Feedback Workspace</h1>
+          <p>Review requests, update priorities, and manage conversations in one place.</p>
+        </header>
+        <div class="feedback-layout">
+          <aside class="panel control-deck">
+            <section class="deck-section">
+              <h3>Saved Views</h3>
+              <div id="saved-views" class="saved-views">
+                <button class="saved-view is-active" data-view="all" type="button">Inbox</button>
+                <button class="saved-view" data-view="high_mrr" type="button">High MRR</button>
+                <button class="saved-view" data-view="needs_attention" type="button">Needs Attention</button>
+                <button class="saved-view" data-view="my_posts" type="button">Owned By Me</button>
+              </div>
+              <div id="custom-saved-filters" class="custom-saved-filters"></div>
+            </section>
+
+            <section class="deck-section">
+              <div class="deck-section-head">
+                <h3>Boards</h3>
+                <button id="toggle-create-board" class="ghost small" type="button">New Board</button>
+              </div>
+              <form id="create-board-form" class="board-create hidden">
+                <input id="new-board-name" type="text" maxlength="80" placeholder="Board name" />
+                <select id="new-board-visibility">
+                  <option value="public">Public</option>
+                  <option value="private">Private</option>
+                  <option value="custom">Custom Segments</option>
+                </select>
+                <input
+                  id="new-board-segments"
+                  type="text"
+                  class="hidden"
+                  placeholder="segments (comma separated)"
+                />
+                <div class="request-actions">
+                  <button id="create-board-submit" class="primary small" type="submit">Create</button>
+                  <button id="create-board-cancel" class="ghost small" type="button">Cancel</button>
+                </div>
+              </form>
+              <div id="company-board-list" class="board-list"></div>
+            </section>
+
+            <section class="deck-section">
+              <h3>Operations Snapshot</h3>
+              <div id="deck-metrics" class="deck-metrics"></div>
+            </section>
+          </aside>
+
+          <section class="panel stream">
+            <div class="stream-head">
+              <div>
+                <h2>Feedback Stream</h2>
+                <p id="stream-count">0 requests</p>
+              </div>
+              <div class="stream-controls">
+                <input id="company-feedback-search" type="search" placeholder="Search feedback..." />
+                <select id="company-feedback-filter">
+                  <option value="all">All statuses</option>
+                  <option value="under_review">Under Review</option>
+                  <option value="upcoming">Upcoming</option>
+                  <option value="planned">Planned</option>
+                  <option value="in_progress">In Progress</option>
+                  <option value="complete">Complete</option>
+                </select>
+                <select id="company-feedback-sort">
+                  <option value="trending">Trending</option>
+                  <option value="top">Top Votes</option>
+                  <option value="new">Newest</option>
+                </select>
+              </div>
+              <div class="stream-filters">
+                <label class="pill-toggle">
+                  <input id="filter-support-only" type="checkbox" />
+                  <span>Support Captured</span>
+                </label>
+                <label class="pill-toggle">
+                  <input id="filter-comments-only" type="checkbox" />
+                  <span>Has Comments</span>
+                </label>
+                <label class="field-pill">
+                  <span>Min MRR</span>
+                  <input id="filter-min-mrr" type="number" min="0" step="100" placeholder="0" />
+                </label>
+                <label class="field-pill">
+                  <span>Owner</span>
+                  <select id="filter-owner">
+                    <option value="">Any owner</option>
+                  </select>
+                </label>
+                <button id="save-current-filter" class="ghost small" type="button">Save Filter</button>
+                <button id="clear-filters" class="ghost small" type="button">Clear</button>
+              </div>
+            </div>
+
+            <article id="bulk-actions" class="bulk-actions hidden">
+              <h3>Bulk Actions</h3>
+              <p id="bulk-count" class="muted">0 selected</p>
+              <div class="bulk-row">
+                <select id="bulk-status">
+                  <option value="">Status (no change)</option>
+                  <option value="under_review">Under Review</option>
+                  <option value="upcoming">Upcoming</option>
+                  <option value="planned">Planned</option>
+                  <option value="in_progress">In Progress</option>
+                  <option value="complete">Complete</option>
+                </select>
+                <select id="bulk-owner">
+                  <option value="">Owner (no change)</option>
+                </select>
+                <input id="bulk-add-tags" type="text" placeholder="Add tags: comma,separated" />
+                <input id="bulk-remove-tags" type="text" placeholder="Remove tags: comma,separated" />
+                <button id="bulk-apply" class="primary" type="button">Apply Bulk Update</button>
+                <button id="bulk-clear" class="ghost" type="button">Clear Selection</button>
+              </div>
+            </article>
+
+            <article id="stream-composer" class="composer-card hidden">
+              <h3>Create Post</h3>
+              <p class="muted">Capture a clear request with enough context to prioritize accurately.</p>
+              <label class="composer-field">
+                <span>Title</span>
+                <input id="company-new-title" type="text" placeholder="Short, descriptive title" />
+              </label>
+              <label class="composer-field">
+                <span>Details</span>
+                <textarea id="company-new-details" rows="5" placeholder="What problem is happening? Who is impacted?"></textarea>
+              </label>
+              <div class="composer-meta">
+                <span id="composer-board-pill" class="tag-pill">Board: -</span>
+              </div>
+              <div class="composer-actions">
+                <button id="company-clear-post" class="ghost" type="button">Cancel</button>
+                <button id="company-create-post" class="primary" type="button">Create Post</button>
+              </div>
+            </article>
+
+            <div id="company-feedback-list" class="feedback-list"></div>
+          </section>
+
+          <aside class="panel inspector">
+            <div id="detail-empty" class="detail-empty">Select a request to inspect context, ownership, and thread.</div>
+            <div id="detail-view" class="detail-view hidden">
+              <h2 id="detail-title"></h2>
+              <p id="detail-copy" class="muted"></p>
+
+              <div class="property-grid">
+                <label>
+                  Status
+                  <select id="detail-status">
+                    <option value="under_review">Under Review</option>
+                    <option value="upcoming">Upcoming</option>
+                    <option value="planned">Planned</option>
+                    <option value="in_progress">In Progress</option>
+                    <option value="complete">Complete</option>
+                  </select>
+                </label>
+
+                <label>
+                  Owner
+                  <select id="detail-owner"></select>
+                </label>
+
+                <label>
+                  ETA
+                  <input id="detail-eta" type="date" />
+                </label>
+              </div>
+
+              <label class="tag-input">
+                Tags
+                <input id="detail-tags" type="text" placeholder="comma, separated, tags" />
+              </label>
+
+              <button id="save-status" class="primary" type="button">Save Changes</button>
+
+              <div class="merge-panel">
+                <h3>Merge Management</h3>
+                <div class="merge-row">
+                  <select id="merge-target-post">
+                    <option value="">Merge this post into...</option>
+                  </select>
+                  <button id="merge-post" class="ghost" type="button">Merge</button>
+                </div>
+                <div id="merged-sources" class="merged-sources"></div>
+              </div>
+
+              <div class="merge-panel">
+                <h3>Customer Signals</h3>
+                <div id="detail-voter-summary" class="voter-summary"></div>
+                <div id="detail-voter-list" class="voter-list"></div>
+              </div>
+
+              <h3>Conversation</h3>
+              <div id="detail-comments" class="comment-list"></div>
+              <div id="comment-reply-context" class="reply-context hidden"></div>
+              <textarea id="new-comment" rows="3" placeholder="Add internal note or context..."></textarea>
+              <button id="add-comment" class="ghost" type="button">Add Comment</button>
+            </div>
+          </aside>
+        </div>
+      </section>
+
+      <section id="company-roadmap" class="company-page">
+        <header class="page-head">
+          <h1>Roadmap Planning</h1>
+          <p>Move ideas through planned, in progress, and complete with board-level context.</p>
+        </header>
+        <article class="panel roadmap-controls">
+          <div class="control-stack">
+            <label>
+              Board
+              <select id="roadmap-board-filter">
+                <option value="all">All boards</option>
+              </select>
+            </label>
+            <label>
+              Search roadmap
+              <input id="roadmap-search" type="search" placeholder="Find feature in roadmap..." />
+            </label>
+          </div>
+          <p id="roadmap-context" class="muted">Roadmap is synced with feedback board selection.</p>
+          <div class="roadmap-stat-row">
+            <span class="status-pill status-planned">Planned <strong id="roadmap-count-planned">0</strong></span>
+            <span class="status-pill status-in_progress">In Progress <strong id="roadmap-count-progress">0</strong></span>
+            <span class="status-pill status-complete">Complete <strong id="roadmap-count-complete">0</strong></span>
+            <span class="status-pill">Total <strong id="roadmap-count-total">0</strong></span>
+          </div>
+        </article>
+
+        <div class="roadmap-grid">
+          <article class="panel">
+            <h3>Planned</h3>
+            <div id="company-roadmap-planned" class="column"></div>
+          </article>
+          <article class="panel">
+            <h3>In Progress</h3>
+            <div id="company-roadmap-progress" class="column"></div>
+          </article>
+          <article class="panel">
+            <h3>Complete</h3>
+            <div id="company-roadmap-complete" class="column"></div>
+          </article>
+        </div>
+      </section>
+
+      <section id="company-access" class="company-page">
+        <header class="page-head">
+          <h1>Access Control</h1>
+          <p>Approve user access and tune board visibility by audience segment.</p>
+        </header>
+        <article class="panel">
+          <h2>Access Requests</h2>
+          <div id="access-request-list" class="request-list"></div>
+        </article>
+        <article class="panel">
+          <h2>Board Access Settings</h2>
+          <p class="muted">Set each board to public, private, or custom segment access.</p>
+          <div id="board-settings-list" class="request-list"></div>
+        </article>
+        <article class="panel">
+          <h2>Teammates</h2>
+          <div id="company-member-list" class="request-list"></div>
+        </article>
+      </section>
+
+      <section id="company-changelog" class="company-page">
+        <header class="page-head">
+          <h1>Changelog Publisher</h1>
+          <p>Create polished release notes, save drafts, and preview exactly what customers see.</p>
+        </header>
+        <article class="panel changelog-form">
+          <h2>Write Changelog</h2>
+          <p class="muted">Create drafts, preview exactly what users see, and publish when ready.</p>
+          <input id="ch-editing-id" type="hidden" />
+          <div class="changelog-input-grid">
+            <label>
+              Board
+              <select id="ch-board"></select>
+            </label>
+            <label>
+              Release title
+              <input id="ch-title" type="text" placeholder="What shipped?" />
+            </label>
+            <label>
+              Tags
+              <input id="ch-tags" type="text" placeholder="new, improvement, api" />
+            </label>
+          </div>
+          <div class="rte">
+            <div class="rte-toolbar" id="rte-toolbar">
+              <button type="button" data-cmd="bold"><strong>B</strong></button>
+              <button type="button" data-cmd="italic"><em>I</em></button>
+              <button type="button" data-cmd="underline"><span style="text-decoration: underline">U</span></button>
+              <button type="button" data-cmd="formatH2">H2</button>
+              <button type="button" data-cmd="formatH3">H3</button>
+              <button type="button" data-cmd="insertUnorderedList">• List</button>
+              <button type="button" data-cmd="insertOrderedList">1. List</button>
+              <button type="button" data-cmd="blockquote">Quote</button>
+              <button type="button" data-cmd="insertCodeBlock">Code</button>
+              <button type="button" data-cmd="createLink">Link</button>
+              <button type="button" data-cmd="insertImageUrl">Image URL</button>
+              <button type="button" data-cmd="insertVideoUrl">Video URL</button>
+              <button type="button" data-cmd="uploadImage">Upload Image</button>
+              <button type="button" data-cmd="uploadVideo">Upload Video</button>
+              <button type="button" data-cmd="togglePreview">Preview</button>
+              <button type="button" data-cmd="removeFormat">Clear</button>
+            </div>
+            <input id="ch-image-upload" type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml" class="hidden" />
+            <input id="ch-video-upload" type="file" accept="video/mp4,video/webm,video/ogg,video/quicktime" class="hidden" />
+            <div class="rte-body">
+              <div
+                id="ch-content-editor"
+                class="rte-editor"
+                contenteditable="true"
+                role="textbox"
+                aria-label="Changelog content"
+                data-placeholder="Write your update. Add detail, context, and screenshots if needed."
+              ></div>
+              <div id="rte-preview" class="rte-preview hidden" aria-live="polite"></div>
+            </div>
+          </div>
+          <div class="changelog-actions">
+            <button id="ch-clear" class="ghost" type="button">Clear</button>
+            <button id="ch-save-draft" class="ghost" type="button">Save Draft</button>
+            <button id="ch-create" class="primary" type="button">Publish</button>
+          </div>
+        </article>
+
+        <article class="panel changelog-browser">
+          <div class="changelog-browser-head">
+            <h2>Entries</h2>
+            <div class="changelog-search-row">
+              <input id="changelog-query" type="search" placeholder="Search title/content/tags..." />
+              <select id="changelog-board-filter">
+                <option value="all">All boards</option>
+              </select>
+              <select id="changelog-status-filter">
+                <option value="all">All</option>
+                <option value="published">Published</option>
+                <option value="draft">Draft</option>
+              </select>
+              <input id="changelog-tag-filter" type="search" placeholder="Filter by tag..." />
+              <button id="changelog-refresh" class="ghost small" type="button">Refresh</button>
+            </div>
+          </div>
+          <div class="changelog-browser-grid">
+            <div id="company-changelog-list" class="changelog-list"></div>
+            <aside id="changelog-preview-panel" class="changelog-preview-panel">
+              <div class="preview-empty">Select an entry to preview details.</div>
+              <article class="preview-content hidden">
+                <div class="chips" id="ch-preview-tags"></div>
+                <h3 id="ch-preview-title"></h3>
+                <p id="ch-preview-meta" class="muted"></p>
+                <div id="ch-preview-body" class="changelog-body"></div>
+                <div class="request-actions">
+                  <button id="ch-edit-entry" class="ghost" type="button">Edit</button>
+                </div>
+              </article>
+            </aside>
+          </div>
+        </article>
+      </section>
+
+      <section id="company-autopilot" class="company-page">
+        <header class="page-head">
+          <h1>AI Inbox</h1>
+          <p>Triage support-captured pain and merge high-confidence signals into roadmap items.</p>
+        </header>
+        <article class="panel ai-inbox-panel">
+          <h2>AI Inbox</h2>
+          <p class="muted">Review support-captured events, triage confidently, and route sources by workflow.</p>
+          <div id="ai-inbox-tabs" class="inline-tabs">
+            <button class="inline-tab is-active" data-ai-tab="incoming" type="button">
+              <span class="ms">inbox</span>
+              <span>Incoming</span>
+            </button>
+            <button class="inline-tab" data-ai-tab="configuration" type="button">
+              <span class="ms">settings</span>
+              <span>Configuration</span>
+            </button>
+          </div>
+          <div id="ai-inbox-incoming" class="ai-inbox-view is-active">
+            <div class="triage-summary" id="triage-summary">
+              <article>
+                <span>Needs Triage</span>
+                <strong id="triage-summary-needs">0</strong>
+              </article>
+              <article>
+                <span>Merged</span>
+                <strong id="triage-summary-merged">0</strong>
+              </article>
+              <article>
+                <span>Total Events</span>
+                <strong id="triage-summary-total">0</strong>
+              </article>
+            </div>
+            <div class="triage-filters">
+              <label>
+                Status
+                <select id="triage-status-filter">
+                  <option value="needs_triage">Needs triage</option>
+                  <option value="auto_merged">Merged</option>
+                  <option value="all">All</option>
+                </select>
+              </label>
+              <label>
+                Source
+                <select id="triage-source-filter">
+                  <option value="all">All</option>
+                  <option value="freshdesk">Freshdesk</option>
+                  <option value="zoom">Zoom</option>
+                </select>
+              </label>
+              <label>
+                Search
+                <input id="triage-search" type="search" placeholder="Search company, email, text..." />
+              </label>
+              <label>
+                Min MRR
+                <input id="triage-min-mrr" type="number" min="0" step="100" placeholder="0" />
+              </label>
+              <button id="triage-refresh" class="ghost small" type="button">Refresh</button>
+            </div>
+            <div id="triage-list" class="triage-list"></div>
+          </div>
+          <div id="ai-inbox-configuration" class="ai-inbox-view">
+            <p class="muted">Choose how each source routes ideas into AI Inbox.</p>
+            <div id="triage-config-list" class="triage-config-list"></div>
+          </div>
+        </article>
+      </section>
+
+      <section id="company-reporting" class="company-page">
+        <header class="page-head">
+          <h1>Reporting & Exports</h1>
+          <p>Track impact by MRR, inspect opportunities, and export snapshots for stakeholders.</p>
+        </header>
+        <div id="metrics" class="metrics"></div>
+        <article class="panel exports-panel">
+          <h2>Exports</h2>
+          <p class="muted">Download posts/comments snapshots for reporting and analysis.</p>
+          <div class="request-actions">
+            <button id="export-posts-csv" class="ghost" type="button">Export Posts CSV</button>
+            <button id="export-comments-csv" class="ghost" type="button">Export Comments CSV</button>
+          </div>
+        </article>
+        <article class="panel opportunities-panel">
+          <h2>Opportunities</h2>
+          <div id="opportunities-list" class="top-post-list"></div>
+        </article>
+        <article class="panel top-posts">
+          <h2>Top Requests by MRR</h2>
+          <div id="reporting-top-posts" class="top-post-list"></div>
+        </article>
+        <article class="panel customer-view-panel">
+          <div class="changelog-browser-head">
+            <h2>Customer View</h2>
+            <div class="changelog-search-row">
+              <input id="customer-view-query" type="search" placeholder="Search customer, company, or idea..." />
+              <select id="customer-view-board">
+                <option value="all">All boards</option>
+              </select>
+              <input id="customer-view-min-mrr" type="number" min="0" step="100" placeholder="Min MRR" />
+              <button id="customer-view-refresh" class="ghost small" type="button">Refresh</button>
+            </div>
+          </div>
+          <p id="customer-view-summary" class="muted"></p>
+          <div id="customer-view-list" class="request-list"></div>
+        </article>
+      </section>
+    </main>
+
+    <script src="/company-assets/company.js"></script>
+  </body>
+</html>

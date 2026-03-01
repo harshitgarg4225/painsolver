@@ -1,0 +1,8 @@
+node_modules
+dist
+.env
+.prisma
+.local
+.vercel
+.DS_Store
+src/public/uploads/changelog/*

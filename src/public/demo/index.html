@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PainSolver Portal Demo</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Space+Grotesk:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./demo.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <div class="brand-row">
+          <div class="logo-mark">P</div>
+          <strong>PainSolver</strong>
+        </div>
+
+        <nav class="top-nav" id="top-nav">
+          <button class="tab-btn is-active" data-tab="feedback" type="button">Feedback</button>
+          <button class="tab-btn" data-tab="roadmap" type="button">Roadmap</button>
+          <button class="tab-btn" data-tab="changelog" type="button">Changelog</button>
+        </nav>
+
+        <button class="login-btn" type="button">Log in</button>
+      </header>
+
+      <main class="page-wrap">
+        <section class="tab-page is-active" id="tab-feedback">
+          <div class="feedback-layout">
+            <aside class="left-panel card">
+              <section class="login-card">
+                <h2>Log in to vote & comment</h2>
+                <p>Support tickets are captured automatically. Login enables explicit votes.</p>
+                <button class="olive-btn" type="button">Log in</button>
+              </section>
+
+              <section>
+                <div class="section-head">
+                  <h3>Boards</h3>
+                </div>
+                <div id="board-list" class="board-list"></div>
+              </section>
+            </aside>
+
+            <section class="center-panel">
+              <article class="card composer">
+                <h2 id="composer-title">Ad Reporting and Attribution</h2>
+                <input id="new-post-title" type="text" placeholder="Short, descriptive title" />
+                <textarea id="new-post-details" rows="3" placeholder="Any additional details..."></textarea>
+                <div class="composer-actions">
+                  <button class="ghost-btn" id="clear-post" type="button">Cancel</button>
+                  <button class="olive-btn" id="create-post" type="button">Create Post</button>
+                </div>
+              </article>
+
+              <article class="card">
+                <div class="toolbar">
+                  <div class="toolbar-left">
+                    <label>
+                      Showing
+                      <select id="sort-mode">
+                        <option value="trending">Trending</option>
+                        <option value="newest">Newest</option>
+                        <option value="mrr">Highest MRR</option>
+                      </select>
+                    </label>
+                  </div>
+                  <input id="search-feedback" type="search" placeholder="Search feedback..." />
+                </div>
+                <div id="feedback-list" class="feedback-list"></div>
+              </article>
+            </section>
+
+            <aside class="detail-panel card">
+              <div id="detail-empty" class="muted">Select a post to see details.</div>
+              <div id="detail-view" class="hidden">
+                <h2 id="detail-title"></h2>
+                <p class="muted" id="detail-meta"></p>
+                <p id="detail-body"></p>
+
+                <div class="detail-grid">
+                  <label>
+                    Status
+                    <select id="detail-status">
+                      <option value="planned">Planned</option>
+                      <option value="in_progress">In Progress</option>
+                      <option value="shipped">Complete</option>
+                    </select>
+                  </label>
+                  <label>
+                    Category
+                    <input id="detail-category" type="text" />
+                  </label>
+                </div>
+
+                <h3>Comments</h3>
+                <div id="comment-list" class="comment-list"></div>
+                <textarea id="new-comment" rows="2" placeholder="Leave an internal comment"></textarea>
+                <button class="olive-btn" id="add-comment" type="button">Add Comment</button>
+              </div>
+            </aside>
+          </div>
+        </section>
+
+        <section class="tab-page" id="tab-roadmap">
+          <div class="roadmap-head">
+            <h1>Roadmap</h1>
+            <p class="muted">Prioritized by captured revenue and explicit demand.</p>
+          </div>
+
+          <div class="roadmap-grid">
+            <article class="status-column card">
+              <header><span class="dot planned"></span><h2>Planned</h2></header>
+              <div id="roadmap-planned" class="column-list"></div>
+            </article>
+
+            <article class="status-column card">
+              <header><span class="dot progress"></span><h2>In Progress</h2></header>
+              <div id="roadmap-progress" class="column-list"></div>
+            </article>
+
+            <article class="status-column card">
+              <header><span class="dot shipped"></span><h2>Complete</h2></header>
+              <div id="roadmap-shipped" class="column-list"></div>
+            </article>
+          </div>
+        </section>
+
+        <section class="tab-page" id="tab-changelog">
+          <div class="changelog-head card">
+            <h1>Changelog</h1>
+            <p>Follow up on the latest improvements and launches.</p>
+            <input id="search-changelog" type="search" placeholder="Search entries..." />
+          </div>
+          <div id="changelog-list" class="changelog-list"></div>
+        </section>
+      </main>
+    </div>
+
+    <script src="./demo.js"></script>
+  </body>
+</html>

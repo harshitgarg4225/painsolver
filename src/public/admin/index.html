@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PainSolver Console</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Space+Grotesk:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/admin/admin.css" />
+  </head>
+  <body>
+    <div class="bg-noise"></div>
+    <main class="app-shell">
+      <header class="hero">
+        <div>
+          <p class="eyebrow">PainSolver</p>
+          <h1>Voice of Customer Control Room</h1>
+          <p class="subhead">
+            Passive support capture + explicit roadmap voting in one place.
+          </p>
+        </div>
+        <div class="auth-box">
+          <label for="admin-key">Admin key</label>
+          <div class="auth-row">
+            <input id="admin-key" type="password" placeholder="x-admin-key" />
+            <button id="save-admin-key" class="btn btn-olive">Save</button>
+          </div>
+        </div>
+      </header>
+
+      <section class="stats-grid" id="stats-grid"></section>
+
+      <section class="panel-grid">
+        <article class="panel panel-large">
+          <div class="panel-head">
+            <h2>Top Roadmap Items by Attached MRR</h2>
+            <button id="refresh-posts" class="btn btn-outline">Refresh</button>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Feature</th>
+                  <th>Status</th>
+                  <th>Votes</th>
+                  <th>MRR</th>
+                </tr>
+              </thead>
+              <tbody id="posts-table"></tbody>
+            </table>
+          </div>
+        </article>
+
+        <article class="panel">
+          <div class="panel-head">
+            <h2>Create Roadmap Post</h2>
+          </div>
+          <form id="create-post-form" class="stack">
+            <label>
+              Board
+              <select id="board-select" required></select>
+            </label>
+            <label>
+              Category (optional)
+              <select id="category-select">
+                <option value="">Auto choose</option>
+              </select>
+            </label>
+            <label>
+              Title
+              <input id="post-title" type="text" required placeholder="What should we build?" />
+            </label>
+            <label>
+              Description
+              <textarea id="post-description" rows="4" placeholder="Context and expected impact"></textarea>
+            </label>
+            <button class="btn btn-olive" type="submit">Create Post</button>
+          </form>
+        </article>
+      </section>
+
+      <section class="panel-grid">
+        <article class="panel panel-large">
+          <div class="panel-head">
+            <h2>Triage Queue (needs_triage)</h2>
+            <button id="refresh-triage" class="btn btn-outline">Refresh</button>
+          </div>
+          <div id="triage-list" class="stack"></div>
+        </article>
+
+        <article class="panel">
+          <div class="panel-head">
+            <h2>Recent Activity</h2>
+          </div>
+          <div id="activity-list" class="stack"></div>
+        </article>
+      </section>
+
+      <footer>
+        <p>Theme: dark olive green, white, black</p>
+      </footer>
+    </main>
+
+    <template id="triage-item-template">
+      <article class="triage-item">
+        <p class="triage-meta"></p>
+        <p class="triage-text"></p>
+        <div class="triage-actions">
+          <select class="triage-post-picker"></select>
+          <button class="btn btn-olive triage-merge" type="button">Merge to Post</button>
+        </div>
+      </article>
+    </template>
+
+    <script src="/admin/admin.js"></script>
+  </body>
+</html>
