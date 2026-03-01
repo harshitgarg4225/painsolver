@@ -54,9 +54,25 @@ Notes:
 - SDK script: `GET /sdk/painsolver.js`
 - Install helper page: `GET /install`
 - Commands:
-  - `window.PainSolver("config", { apiBaseUrl })`
+  - `window.PainSolver("init", { apiBaseUrl, boardToken, boardId, ssoToken, onLoadCallback })`
+  - `window.PainSolver("config", { ... })`
   - `window.PainSolver("identify", { user, company, hash })`
+  - `window.PainSolver("authenticate", { ssoToken })`
   - `window.PainSolver("render", { selector })`
+  - `window.PainSolver("initChangelog", { selector, query, limit })`
+  - `window.PainSolver("hasUnseenEntries", { callback })`
+  - `window.PainSolver("closeChangelog", { selector })`
+  - `window.PainSolver("registerOnChangelogOpenCallback", fn)`
+
+### SDK Security / Tokens
+- Issue board-scoped token (server-side): `POST /api/v1/sdk/board-token` (`apiKey` required)
+- Issue SSO token (server-side): `POST /api/v1/sdk/sso-token` (`apiKey` required)
+- Consume SSO token: `POST /api/v1/sdk/sso/consume`
+- Widget posts (board-token/sso-token aware): `GET /api/v1/sdk/posts`
+- SDK vote: `POST /api/v1/sdk/votes/create`
+- Changelog list: `GET /api/v1/sdk/changelog`
+- Changelog unseen state: `GET /api/v1/sdk/changelog/unseen`
+- Mark changelog seen: `POST /api/v1/sdk/changelog/seen`
 
 ### Core API (Canny-style)
 All endpoints below support `apiKey` in JSON body or `Authorization: Bearer <apiKey>` unless noted.

@@ -74,17 +74,22 @@ app.get("/install", (req, res) => {
   </head>
   <body>
     <h1>PainSolver Install Snippet</h1>
-    <p>Use this snippet in your app after generating a backend HMAC signature for identify.</p>
+    <p>Use this snippet after your backend issues a scoped board token and secure identify/SSO payload.</p>
     <pre>&lt;script src="${host}/sdk/painsolver.js"&gt;&lt;/script&gt;
 &lt;div id="painsolver-board"&gt;&lt;/div&gt;
+&lt;div id="painsolver-changelog"&gt;&lt;/div&gt;
 &lt;script&gt;
-  PainSolver("config", { apiBaseUrl: "${host}" });
+  PainSolver("init", {
+    apiBaseUrl: "${host}",
+    boardToken: "SERVER_GENERATED_BOARD_TOKEN"
+  });
   PainSolver("identify", {
     user: { email: "user@example.com", name: "User", appUserId: "u_1" },
     company: { name: "acme" },
     hash: "SERVER_GENERATED_HMAC_SHA256"
   }).then(function () {
     PainSolver("render", { selector: "#painsolver-board" });
+    PainSolver("initChangelog", { selector: "#painsolver-changelog" });
   });
 &lt;/script&gt;</pre>
     <p><a href="/portal">Open Customer Portal</a></p>

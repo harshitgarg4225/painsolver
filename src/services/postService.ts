@@ -17,10 +17,14 @@ export interface PostListItem {
   capturedViaSupport: boolean;
 }
 
-export async function listPostsWithVotes(userId?: string): Promise<PostListItem[]> {
+export async function listPostsWithVotes(userId?: string, boardId?: string): Promise<PostListItem[]> {
   const voteLookupUserId = userId ?? "__no_user__";
 
   const posts = await prisma.post.findMany({
+    where: {
+      mergedIntoPostId: null,
+      ...(boardId ? { boardId } : {})
+    },
     orderBy: {
       totalAttachedMrr: "desc"
     },
