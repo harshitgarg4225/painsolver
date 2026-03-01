@@ -1,0 +1,9 @@
+.git
+.local
+node_modules
+dist
+coverage
+*.log
+tmp
+supabase/.temp
+
