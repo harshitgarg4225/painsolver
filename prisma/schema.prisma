@@ -46,6 +46,7 @@ enum PainEventStatus {
   pending_ai
   needs_triage
   auto_merged
+  skipped
 }
 
 enum AiActionTaken {

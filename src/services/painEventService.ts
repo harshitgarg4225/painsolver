@@ -46,7 +46,7 @@ export async function processPainEvent(
   if (extracted.confidenceLevel && extracted.confidenceLevel < 0.3) {
     await prisma.painEvent.update({
       where: { id: painEventId },
-      data: { status: "skipped_low_confidence" }
+      data: { status: "skipped" }
     });
     
     return {
