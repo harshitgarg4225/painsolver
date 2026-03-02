@@ -4,6 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>PainSolver Developer Docs</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="/docs-assets/docs.css" />
   </head>
   <body>
@@ -42,6 +43,10 @@
           <a href="#changelog-widget">Changelog Widget</a>
           <a href="#changelog-customize">Changelog Customization</a>
           <a href="#changelog-privacy">Changelog Privacy</a>
+          <a href="#stripe-integration">Stripe Integration</a>
+          <a href="#mrr-data">MRR & Revenue Data</a>
+          <a href="#integrations">Integrations</a>
+          <a href="#custom-domains">Custom Domains</a>
           <a href="#api-map">API Mapping</a>
         </nav>
       </aside>
@@ -232,6 +237,124 @@ PainSolver("hasUnseenEntries", {
           <h2>Changelog Privacy</h2>
           <p>
             Use board tokens for private release channels. Without a valid token, private board changelog entries are not returned.
+          </p>
+        </section>
+
+        <section id="stripe-integration" data-title="Stripe Integration">
+          <h2>Stripe Integration</h2>
+          <p>
+            PainSolver can automatically fetch customer MRR from Stripe. When a user is identified, their email is used to look up active subscriptions and calculate normalized monthly revenue.
+          </p>
+          <h3>Configuration</h3>
+          <p>Set the following environment variables:</p>
+          <pre><button class="copy-btn" type="button">Copy</button><code># Enable Stripe integration
+STRIPE_API_KEY=sk_live_your_stripe_secret_key
+
+# Set to "false" to use real Stripe (defaults to mock mode)
+USE_MOCK_STRIPE=false</code></pre>
+          <h3>How it works</h3>
+          <ul>
+            <li>When <code>identify()</code> is called, PainSolver looks up the customer by email in Stripe</li>
+            <li>Active subscriptions are fetched and normalized to monthly values</li>
+            <li>Yearly plans are divided by 12, quarterly by 3, etc.</li>
+            <li>The total MRR is stored on the company record for prioritization</li>
+          </ul>
+        </section>
+
+        <section id="mrr-data" data-title="MRR & Revenue Data">
+          <h2>MRR & Revenue Data</h2>
+          <p>
+            MRR data powers PainSolver's revenue-weighted prioritization. You can provide MRR in multiple ways:
+          </p>
+          <h3>Option 1: Pass manually via SDK</h3>
+          <pre><button class="copy-btn" type="button">Copy</button><code>PainSolver("identify", {
+  user: { email: "user@acme.com", name: "User" },
+  company: {
+    name: "Acme Corp",
+    monthlySpend: 1200,  // Direct MRR value in dollars
+    stripeCustomerId: "cus_123"  // Optional: for reference
+  },
+  hash: "HMAC_SHA256_FROM_YOUR_BACKEND"
+});</code></pre>
+          <h3>Option 2: Automatic Stripe lookup</h3>
+          <p>If Stripe is configured, MRR is automatically calculated from active subscriptions when <code>monthlySpend</code> is not provided.</p>
+          <h3>Option 3: Server-side API</h3>
+          <pre><button class="copy-btn" type="button">Copy</button><code>// Update company MRR via API
+PUT /api/v1/companies/:companyId
+Authorization: Bearer &lt;API_KEY&gt;
+{
+  "monthlySpend": 2500
+}</code></pre>
+          <h3>MRR in Prioritization</h3>
+          <p>
+            Ideas are scored using total MRR from all voters. High-MRR customers' requests bubble up in the "Trending" sort and appear prominently in the roadmap planning view.
+          </p>
+        </section>
+
+        <section id="integrations" data-title="Integrations">
+          <h2>Integrations</h2>
+          <p>
+            PainSolver connects to external tools to automatically capture customer pain points and feedback.
+          </p>
+          <h3>Available Integrations</h3>
+          <table>
+            <thead>
+              <tr>
+                <th>Integration</th>
+                <th>Data Source</th>
+                <th>Configuration</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>Freshdesk</strong></td>
+                <td>Support tickets & conversations</td>
+                <td>API key + domain in AI Inbox settings</td>
+              </tr>
+              <tr>
+                <td><strong>Zoom</strong></td>
+                <td>Call transcripts</td>
+                <td>OAuth connection in AI Inbox settings</td>
+              </tr>
+              <tr>
+                <td><strong>Slack</strong></td>
+                <td>Channel messages</td>
+                <td>OAuth connection in AI Inbox settings</td>
+              </tr>
+              <tr>
+                <td><strong>Stripe</strong></td>
+                <td>Subscription MRR</td>
+                <td>API key via environment variable</td>
+              </tr>
+            </tbody>
+          </table>
+          <h3>Setting up Integrations</h3>
+          <p>
+            Navigate to <strong>Company Dashboard → AI Inbox</strong> tab to connect Freshdesk, Zoom, and Slack. Each integration has its own OAuth flow or API key configuration.
+          </p>
+          <p>
+            Once connected, AI agents analyze incoming conversations and automatically extract feature requests, which appear in your triage queue for review.
+          </p>
+        </section>
+
+        <section id="custom-domains" data-title="Custom Domains">
+          <h2>Custom Domains</h2>
+          <p>
+            Custom domain support allows you to host PainSolver on your own subdomain (e.g., <code>feedback.yourcompany.com</code>).
+          </p>
+          <h3>Current Status</h3>
+          <p>
+            <strong>Custom domains are not yet supported.</strong> All PainSolver instances currently run on <code>painsolver.vercel.app</code>.
+          </p>
+          <h3>Planned Features</h3>
+          <ul>
+            <li>CNAME configuration for custom subdomains</li>
+            <li>White-label portal with your branding</li>
+            <li>Custom SSL certificates via Let's Encrypt</li>
+            <li>Per-workspace URL configuration</li>
+          </ul>
+          <p>
+            <em>This feature is on our roadmap. Contact us if you need custom domain support for your deployment.</em>
           </p>
         </section>
 
