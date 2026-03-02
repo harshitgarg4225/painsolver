@@ -1685,26 +1685,187 @@
     };
   }
 
+  function renderIntegrationCards() {
+    // Zoom Integration Card
+    var zoomCard = document.getElementById("zoom-integration-card");
+    var zoomStatusEl = document.getElementById("zoom-connection-status");
+    var zoomStatusDetails = document.getElementById("zoom-status-details");
+    var zoomActions = document.getElementById("zoom-actions");
+
+    if (zoomCard && zoomStatusEl && zoomStatusDetails && zoomActions) {
+      var zoomConnected = state.zoomConnection && state.zoomConnection.connected;
+      var zoomBusy = state.loading.zoom ? " disabled" : "";
+
+      // Update connection status
+      if (zoomConnected) {
+        zoomStatusEl.textContent = "✓ Connected";
+        zoomStatusEl.className = "connection-status is-connected";
+        zoomCard.classList.add("is-connected");
+      } else {
+        zoomStatusEl.textContent = "Not connected";
+        zoomStatusEl.className = "connection-status";
+        zoomCard.classList.remove("is-connected");
+      }
+
+      // Status details
+      var zoomEmail = zoomConnected ? state.zoomConnection.zoomUserEmail || "Connected account" : "";
+      var zoomLastSync = zoomConnected && state.zoomConnection.lastSyncedAt
+        ? fullDate(state.zoomConnection.lastSyncedAt)
+        : "Never";
+      var zoomExpires = zoomConnected && state.zoomConnection.expiresAt
+        ? fullDate(state.zoomConnection.expiresAt)
+        : "";
+
+      var zoomStatusHtml = "";
+      if (state.errors.zoom) {
+        zoomStatusHtml = '<div class="integration-status has-error">' + esc(state.errors.zoom) + '</div>';
+      } else if (zoomConnected) {
+        zoomStatusHtml = '<div class="integration-status">' +
+          '<strong>Account:</strong> ' + esc(zoomEmail) +
+          ' • <strong>Last sync:</strong> ' + esc(zoomLastSync) +
+          (zoomExpires ? ' • <strong>Token expires:</strong> ' + esc(zoomExpires) : '') +
+          '</div>';
+      } else {
+        zoomStatusHtml = '<div class="integration-status">Connect your Zoom account to start importing call transcripts.</div>';
+      }
+      zoomStatusDetails.innerHTML = zoomStatusHtml;
+
+      // Action buttons
+      zoomActions.innerHTML =
+        '<button class="ghost" data-zoom-connect type="button"' + zoomBusy + '>' +
+        '<span class="ms">link</span> ' + esc(zoomConnected ? "Reconnect" : "Connect Zoom") +
+        '</button>' +
+        '<button class="primary" data-zoom-import type="button"' +
+        (zoomConnected ? "" : " disabled") + zoomBusy + '>' +
+        '<span class="ms">download</span> Import Transcripts' +
+        '</button>' +
+        (zoomConnected
+          ? '<button class="ghost" data-zoom-disconnect type="button"' + zoomBusy + '>' +
+            '<span class="ms">link_off</span> Disconnect</button>'
+          : '');
+    }
+
+    // Freshdesk Integration Card
+    var freshdeskCard = document.getElementById("freshdesk-integration-card");
+    var freshdeskStatusEl = document.getElementById("freshdesk-connection-status");
+    var freshdeskConfigForm = document.getElementById("freshdesk-config-form");
+    var freshdeskStatusDetails = document.getElementById("freshdesk-status-details");
+    var freshdeskActions = document.getElementById("freshdesk-actions");
+
+    if (freshdeskCard && freshdeskStatusEl && freshdeskConfigForm && freshdeskStatusDetails && freshdeskActions) {
+      var freshdesk = state.freshdeskConnection || defaultFreshdeskConnection();
+      var freshdeskConnected = Boolean(freshdesk.connected);
+      var freshdeskBusy = state.loading.freshdesk ? " disabled" : "";
+      var freshdeskDomain = freshdesk.domain || "";
+      var freshdeskFilterField = freshdesk.filterField || "";
+      var freshdeskFilterValue = freshdesk.filterValue || "";
+
+      // Update connection status
+      if (freshdeskConnected) {
+        freshdeskStatusEl.textContent = "✓ Connected";
+        freshdeskStatusEl.className = "connection-status is-connected";
+        freshdeskCard.classList.add("is-connected");
+      } else if (freshdesk.hasApiKey) {
+        freshdeskStatusEl.textContent = "API key saved";
+        freshdeskStatusEl.className = "connection-status";
+        freshdeskCard.classList.remove("is-connected");
+      } else {
+        freshdeskStatusEl.textContent = "Not connected";
+        freshdeskStatusEl.className = "connection-status";
+        freshdeskCard.classList.remove("is-connected");
+      }
+
+      // Build filter field options
+      var fieldOptions = state.freshdeskParams
+        .map(function (field) {
+          var key = field && field.key ? String(field.key) : "";
+          if (!key) return "";
+          var selected = key === freshdeskFilterField ? " selected" : "";
+          var label = field.label || key;
+          return '<option value="' + esc(key) + '"' + selected + '>' + esc(label) + '</option>';
+        })
+        .filter(Boolean)
+        .join("");
+
+      var hasSelectedField = state.freshdeskParams.some(function (field) {
+        return field && field.key === freshdeskFilterField;
+      });
+      if (freshdeskFilterField && !hasSelectedField) {
+        fieldOptions += '<option value="' + esc(freshdeskFilterField) + '" selected>' + esc(freshdeskFilterField) + '</option>';
+      }
+      fieldOptions = '<option value="">No filter (import all)</option>' + fieldOptions;
+
+      // Config form
+      freshdeskConfigForm.innerHTML =
+        '<div class="integration-config-row">' +
+        '<label>Freshdesk Domain' +
+        '<input type="text" data-freshdesk-domain value="' + esc(freshdeskDomain) +
+        '" placeholder="yourcompany.freshdesk.com" />' +
+        '</label>' +
+        '<label>API Key' +
+        '<input type="password" data-freshdesk-api-key value="" placeholder="' +
+        esc(freshdesk.hasApiKey ? "••••••• (saved)" : "Enter your API key") + '" />' +
+        '</label>' +
+        '</div>' +
+        '<div class="integration-config-row">' +
+        '<label>Filter by Field (optional)' +
+        '<select data-freshdesk-filter-field>' + fieldOptions + '</select>' +
+        '</label>' +
+        '<label>Match Value' +
+        '<input type="text" data-freshdesk-filter-value value="' + esc(freshdeskFilterValue) +
+        '" placeholder="e.g. Enterprise, High, 2" />' +
+        '</label>' +
+        '</div>';
+
+      // Status details
+      var freshdeskLastSync = freshdesk.lastTicketSyncAt ? fullDate(freshdesk.lastTicketSyncAt) : "Never";
+      var freshdeskStatusHtml = "";
+      if (state.errors.freshdesk) {
+        freshdeskStatusHtml = '<div class="integration-status has-error">' + esc(state.errors.freshdesk) + '</div>';
+      } else if (freshdeskConnected) {
+        freshdeskStatusHtml = '<div class="integration-status">' +
+          '<strong>Domain:</strong> ' + esc(freshdeskDomain) +
+          ' • <strong>Last sync:</strong> ' + esc(freshdeskLastSync) +
+          '</div>';
+      } else {
+        freshdeskStatusHtml = '<div class="integration-status">Enter your Freshdesk domain and API key to connect.</div>';
+      }
+      freshdeskStatusDetails.innerHTML = freshdeskStatusHtml;
+
+      // Action buttons
+      freshdeskActions.innerHTML =
+        '<button class="ghost" data-freshdesk-fetch-params type="button"' + freshdeskBusy + '>' +
+        '<span class="ms">sync</span> Fetch Fields' +
+        '</button>' +
+        '<button class="primary" data-freshdesk-save-config type="button"' + freshdeskBusy + '>' +
+        '<span class="ms">save</span> Save Config' +
+        '</button>' +
+        '<button class="primary" data-freshdesk-import type="button"' +
+        (freshdeskConnected ? "" : " disabled") + freshdeskBusy + '>' +
+        '<span class="ms">download</span> Import Tickets' +
+        '</button>' +
+        (freshdeskConnected || freshdesk.hasApiKey || freshdeskDomain
+          ? '<button class="ghost" data-freshdesk-disconnect type="button"' + freshdeskBusy + '>' +
+            '<span class="ms">link_off</span> Disconnect</button>'
+          : '');
+    }
+  }
+
   function renderTriageConfig() {
+    // First render the new integration cards
+    renderIntegrationCards();
+
     if (!el.triageConfigList) {
       return;
     }
 
     if (state.loading.triage && !state.triageConfig.length) {
-      el.triageConfigList.innerHTML = renderStateCard(
-        "loading",
-        "Loading AI source config",
-        "Syncing routing rules for Freshdesk and Zoom."
-      );
+      // Don't show loading in the hidden legacy config
       return;
     }
 
     if (state.errors.triage && !state.triageConfig.length) {
-      el.triageConfigList.innerHTML = renderStateCard(
-        "error",
-        state.errors.triage,
-        "Retry from incoming or refresh the page."
-      );
+      // Show error in integration cards instead
       return;
     }
 
@@ -4288,6 +4449,245 @@
               setButtonBusy(saveButton, false);
             }
           });
+      });
+    }
+
+    // Event listeners for new integration cards (Zoom & Freshdesk)
+    var zoomIntegrationCard = document.getElementById("zoom-integration-card");
+    if (zoomIntegrationCard) {
+      zoomIntegrationCard.addEventListener("click", function (event) {
+        var target = event.target;
+        if (!(target instanceof HTMLElement)) {
+          return;
+        }
+
+        var zoomConnectButton = target.closest("[data-zoom-connect]");
+        if (zoomConnectButton) {
+          setLoading("zoom", true);
+          renderTriageConfig();
+          request("/api/integrations/zoom/connect-url")
+            .then(function (result) {
+              if (!result || !result.url) {
+                throw new Error("Unable to generate Zoom connect URL.");
+              }
+              var popup = window.open(result.url, "_blank", "noopener,noreferrer");
+              if (!popup) {
+                window.location.assign(result.url);
+                return;
+              }
+              window.setTimeout(function () {
+                void loadZoomConnectionStatus();
+              }, 1500);
+              window.setTimeout(function () {
+                void loadZoomConnectionStatus();
+              }, 4500);
+            })
+            .catch(function (error) {
+              pushToast("error", error.message || "Failed to open Zoom connect flow.");
+            })
+            .finally(function () {
+              setLoading("zoom", false);
+              renderTriageConfig();
+            });
+          return;
+        }
+
+        var zoomImportButton = target.closest("[data-zoom-import]");
+        if (zoomImportButton) {
+          if (zoomImportButton instanceof HTMLButtonElement) {
+            setButtonBusy(zoomImportButton, true, "Importing...");
+          }
+          request("/api/integrations/zoom/import-transcripts", {
+            method: "POST",
+            body: { daysBack: 30, maxMeetings: 40 }
+          })
+            .then(function (result) {
+              var imported = Number(result.imported || 0);
+              var queued = Number(result.queued || 0);
+              pushToast("success", "Imported " + imported + " transcript(s), queued " + queued + " for AI processing.");
+              return Promise.all([
+                loadZoomConnectionStatus(),
+                loadTriage(),
+                loadSummary(),
+                loadReportingPosts(),
+                loadOpportunities()
+              ]);
+            })
+            .catch(function (error) {
+              pushToast("error", error.message || "Failed to import Zoom transcripts.");
+            })
+            .finally(function () {
+              if (zoomImportButton instanceof HTMLButtonElement) {
+                setButtonBusy(zoomImportButton, false);
+              }
+            });
+          return;
+        }
+
+        var zoomDisconnectButton = target.closest("[data-zoom-disconnect]");
+        if (zoomDisconnectButton) {
+          if (zoomDisconnectButton instanceof HTMLButtonElement) {
+            setButtonBusy(zoomDisconnectButton, true, "Disconnecting...");
+          }
+          request("/api/integrations/zoom/disconnect", { method: "POST" })
+            .then(function () {
+              state.zoomConnection = defaultZoomConnection();
+              pushToast("success", "Zoom disconnected.");
+              return Promise.all([loadZoomConnectionStatus(), loadTriage()]);
+            })
+            .catch(function (error) {
+              pushToast("error", error.message || "Failed to disconnect Zoom.");
+            })
+            .finally(function () {
+              if (zoomDisconnectButton instanceof HTMLButtonElement) {
+                setButtonBusy(zoomDisconnectButton, false);
+              }
+            });
+          return;
+        }
+      });
+    }
+
+    var freshdeskIntegrationCard = document.getElementById("freshdesk-integration-card");
+    if (freshdeskIntegrationCard) {
+      freshdeskIntegrationCard.addEventListener("click", function (event) {
+        var target = event.target;
+        if (!(target instanceof HTMLElement)) {
+          return;
+        }
+
+        var fetchParamsButton = target.closest("[data-freshdesk-fetch-params]");
+        if (fetchParamsButton) {
+          setLoading("freshdesk", true);
+          renderTriageConfig();
+          request("/api/integrations/freshdesk/params")
+            .then(function (result) {
+              state.freshdeskConnection = result.connection || defaultFreshdeskConnection();
+              state.freshdeskParams = Array.isArray(result.params) ? result.params : [];
+              state.errors.freshdesk = "";
+              pushToast("success", "Freshdesk fields synced.");
+            })
+            .catch(function (error) {
+              pushToast("error", error.message || "Failed to fetch Freshdesk fields.");
+            })
+            .finally(function () {
+              setLoading("freshdesk", false);
+              renderTriageConfig();
+            });
+          return;
+        }
+
+        var saveConfigButton = target.closest("[data-freshdesk-save-config]");
+        if (saveConfigButton) {
+          var domainInput = freshdeskIntegrationCard.querySelector("input[data-freshdesk-domain]");
+          var apiKeyInput = freshdeskIntegrationCard.querySelector("input[data-freshdesk-api-key]");
+          var filterFieldSelect = freshdeskIntegrationCard.querySelector("select[data-freshdesk-filter-field]");
+          var filterValueInput = freshdeskIntegrationCard.querySelector("input[data-freshdesk-filter-value]");
+
+          if (!domainInput || !apiKeyInput || !filterFieldSelect || !filterValueInput) {
+            pushToast("error", "Unable to read Freshdesk config form.");
+            return;
+          }
+
+          if (saveConfigButton instanceof HTMLButtonElement) {
+            setButtonBusy(saveConfigButton, true, "Saving...");
+          }
+
+          var domain = domainInput.value.trim();
+          var apiKey = apiKeyInput.value.trim();
+          var filterField = filterFieldSelect.value.trim();
+          var filterValue = filterValueInput.value.trim();
+
+          request("/api/integrations/freshdesk/configure", {
+            method: "POST",
+            body: {
+              domain: domain || undefined,
+              apiKey: apiKey || undefined,
+              filterField: filterField || "",
+              filterValue: filterValue || ""
+            }
+          })
+            .then(function (result) {
+              state.freshdeskConnection = result.connection || defaultFreshdeskConnection();
+              state.freshdeskParams = Array.isArray(result.params) ? result.params : state.freshdeskParams;
+              state.errors.freshdesk = "";
+              pushToast("success", "Freshdesk configuration saved.");
+              return loadFreshdeskStatus();
+            })
+            .catch(function (error) {
+              pushToast("error", error.message || "Failed to save Freshdesk config.");
+            })
+            .finally(function () {
+              if (saveConfigButton instanceof HTMLButtonElement) {
+                setButtonBusy(saveConfigButton, false);
+              }
+            });
+          return;
+        }
+
+        var importButton = target.closest("[data-freshdesk-import]");
+        if (importButton) {
+          if (importButton instanceof HTMLButtonElement) {
+            setButtonBusy(importButton, true, "Importing...");
+          }
+          request("/api/integrations/freshdesk/import-tickets", {
+            method: "POST",
+            body: { daysBack: 30, maxTickets: 120, processInline: true }
+          })
+            .then(function (result) {
+              state.freshdeskConnection = result.connection || state.freshdeskConnection;
+              state.errors.freshdesk = "";
+              var scanned = Number(result.scanned || 0);
+              var matched = Number(result.matched || 0);
+              var imported = Number(result.imported || 0);
+              pushToast(
+                "success",
+                "Freshdesk: scanned " + scanned + ", matched " + matched + ", imported " + imported + " tickets."
+              );
+              return Promise.all([
+                loadFreshdeskStatus(),
+                loadTriage(),
+                loadSummary(),
+                loadFeedback(),
+                loadRoadmap(),
+                loadReportingPosts(),
+                loadOpportunities()
+              ]);
+            })
+            .catch(function (error) {
+              pushToast("error", error.message || "Failed to import Freshdesk tickets.");
+            })
+            .finally(function () {
+              if (importButton instanceof HTMLButtonElement) {
+                setButtonBusy(importButton, false);
+              }
+            });
+          return;
+        }
+
+        var disconnectButton = target.closest("[data-freshdesk-disconnect]");
+        if (disconnectButton) {
+          if (disconnectButton instanceof HTMLButtonElement) {
+            setButtonBusy(disconnectButton, true, "Disconnecting...");
+          }
+          request("/api/integrations/freshdesk/disconnect", { method: "POST" })
+            .then(function (result) {
+              state.freshdeskConnection = result.connection || defaultFreshdeskConnection();
+              state.freshdeskParams = Array.isArray(result.params) ? result.params : [];
+              state.errors.freshdesk = "";
+              pushToast("success", "Freshdesk disconnected.");
+              return Promise.all([loadFreshdeskStatus(), loadTriage()]);
+            })
+            .catch(function (error) {
+              pushToast("error", error.message || "Failed to disconnect Freshdesk.");
+            })
+            .finally(function () {
+              if (disconnectButton instanceof HTMLButtonElement) {
+                setButtonBusy(disconnectButton, false);
+              }
+            });
+          return;
+        }
       });
     }
 

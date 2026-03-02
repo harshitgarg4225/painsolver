@@ -490,8 +490,74 @@
             <div id="triage-list" class="triage-list"></div>
           </div>
           <div id="ai-inbox-configuration" class="ai-inbox-view">
-            <p class="muted">Choose how each source routes ideas into AI Inbox.</p>
-            <div id="triage-config-list" class="triage-config-list"></div>
+            <div class="config-intro">
+              <h3>Connect Your Support Sources</h3>
+              <p class="muted">Import customer conversations from Zoom calls and Freshdesk tickets. Our AI automatically extracts pain points and creates actionable feature requests.</p>
+            </div>
+            <div class="integrations-grid">
+              <!-- Zoom Integration Card -->
+              <article class="integration-card" id="zoom-integration-card">
+                <div class="integration-header">
+                  <div class="integration-icon zoom-icon">
+                    <span class="ms">videocam</span>
+                  </div>
+                  <div class="integration-title">
+                    <h4>Zoom</h4>
+                    <span class="connection-status" id="zoom-connection-status">Not connected</span>
+                  </div>
+                </div>
+                <p class="integration-desc">Import transcripts from customer calls. AI extracts action items and pain points, then matches or creates feature requests.</p>
+                <div class="integration-flow">
+                  <div class="flow-step"><span class="ms">call</span> Call recorded</div>
+                  <span class="flow-arrow">→</span>
+                  <div class="flow-step"><span class="ms">description</span> Transcript fetched</div>
+                  <span class="flow-arrow">→</span>
+                  <div class="flow-step"><span class="ms">auto_awesome</span> AI analyzes</div>
+                  <span class="flow-arrow">→</span>
+                  <div class="flow-step"><span class="ms">lightbulb</span> Ideas created</div>
+                </div>
+                <div class="integration-status" id="zoom-status-details">
+                  <!-- Populated by JS -->
+                </div>
+                <div class="integration-actions" id="zoom-actions">
+                  <!-- Populated by JS -->
+                </div>
+              </article>
+
+              <!-- Freshdesk Integration Card -->
+              <article class="integration-card" id="freshdesk-integration-card">
+                <div class="integration-header">
+                  <div class="integration-icon freshdesk-icon">
+                    <span class="ms">support_agent</span>
+                  </div>
+                  <div class="integration-title">
+                    <h4>Freshdesk</h4>
+                    <span class="connection-status" id="freshdesk-connection-status">Not connected</span>
+                  </div>
+                </div>
+                <p class="integration-desc">Import support tickets and conversations. AI analyzes ticket content and priority to identify recurring customer pain points.</p>
+                <div class="integration-flow">
+                  <div class="flow-step"><span class="ms">confirmation_number</span> Ticket created</div>
+                  <span class="flow-arrow">→</span>
+                  <div class="flow-step"><span class="ms">forum</span> Conversation fetched</div>
+                  <span class="flow-arrow">→</span>
+                  <div class="flow-step"><span class="ms">auto_awesome</span> AI analyzes</div>
+                  <span class="flow-arrow">→</span>
+                  <div class="flow-step"><span class="ms">lightbulb</span> Ideas created</div>
+                </div>
+                <div class="integration-config" id="freshdesk-config-form">
+                  <!-- Populated by JS -->
+                </div>
+                <div class="integration-status" id="freshdesk-status-details">
+                  <!-- Populated by JS -->
+                </div>
+                <div class="integration-actions" id="freshdesk-actions">
+                  <!-- Populated by JS -->
+                </div>
+              </article>
+            </div>
+            <!-- Legacy config list for routing settings -->
+            <div id="triage-config-list" class="triage-config-list" style="display:none;"></div>
           </div>
         </article>
       </section>

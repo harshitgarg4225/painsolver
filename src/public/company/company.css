@@ -1398,6 +1398,221 @@ main {
 }
 
 /* ========================================
+ * INTEGRATION CARDS (Zoom & Freshdesk)
+ * ======================================== */
+.config-intro {
+  margin-bottom: 24px;
+}
+
+.config-intro h3 {
+  font-size: 1.1rem;
+  margin-bottom: 6px;
+  color: var(--text);
+}
+
+.integrations-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
+  gap: 20px;
+}
+
+.integration-card {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: #fff;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.integration-card:hover {
+  border-color: var(--aqua-600);
+  box-shadow: var(--shadow-glow);
+}
+
+.integration-card.is-connected {
+  border-color: var(--aqua-600);
+}
+
+.integration-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.integration-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.integration-icon .ms {
+  font-size: 24px;
+}
+
+.integration-icon.zoom-icon {
+  background: linear-gradient(135deg, #2d8cff 0%, #0b5cff 100%);
+  color: #fff;
+}
+
+.integration-icon.freshdesk-icon {
+  background: linear-gradient(135deg, #25c16f 0%, #12a35b 100%);
+  color: #fff;
+}
+
+.integration-title {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.integration-title h4 {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--text);
+  margin: 0;
+}
+
+.connection-status {
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: var(--muted);
+}
+
+.connection-status.is-connected {
+  color: var(--aqua-700);
+}
+
+.connection-status.is-error {
+  color: #dc2626;
+}
+
+.integration-desc {
+  font-size: 0.88rem;
+  color: var(--text-subtle);
+  line-height: 1.5;
+  margin: 0;
+}
+
+.integration-flow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px;
+  background: var(--slate-50);
+  border-radius: var(--radius-md);
+  overflow-x: auto;
+}
+
+.flow-step {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.75rem;
+  color: var(--text-subtle);
+  white-space: nowrap;
+}
+
+.flow-step .ms {
+  font-size: 16px;
+  color: var(--aqua-700);
+}
+
+.flow-arrow {
+  color: var(--muted);
+  font-size: 0.9rem;
+  flex-shrink: 0;
+}
+
+.integration-config {
+  display: grid;
+  gap: 12px;
+}
+
+.integration-config-row {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+
+.integration-config label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--text-subtle);
+}
+
+.integration-config input,
+.integration-config select {
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: #fff;
+  color: var(--text);
+  font-size: 0.84rem;
+  padding: 10px 12px;
+}
+
+.integration-config input:focus,
+.integration-config select:focus {
+  border-color: var(--aqua-700);
+  box-shadow: 0 0 0 3px var(--focus);
+}
+
+.integration-status {
+  font-size: 0.78rem;
+  color: var(--muted);
+  padding: 10px 14px;
+  background: var(--slate-50);
+  border-radius: var(--radius-sm);
+}
+
+.integration-status strong {
+  color: var(--text-subtle);
+  font-weight: 500;
+}
+
+.integration-status.has-error {
+  background: #fef2f2;
+  color: #991b1b;
+}
+
+.integration-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+}
+
+.integration-actions button {
+  flex: 1;
+  min-width: 120px;
+}
+
+@media (max-width: 860px) {
+  .integrations-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .integration-flow {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  
+  .integration-config-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ========================================
  * METRICS
  * ======================================== */
 .metrics {
