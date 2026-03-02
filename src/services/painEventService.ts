@@ -41,12 +41,31 @@ export async function processPainEvent(
   }
 
   const extracted = await extractIntentFromTicket(painEvent.rawText);
+  
+  // Skip processing if AI confidence is very low (likely noise)
+  if (extracted.confidenceLevel && extracted.confidenceLevel < 0.3) {
+    await prisma.painEvent.update({
+      where: { id: painEventId },
+      data: { status: "skipped_low_confidence" }
+    });
+    
+    return {
+      painEventId,
+      status: "skipped",
+      similarityScore: 0
+    };
+  }
+
   const intentEmbedding = await generateIntentEmbedding(extracted.intent);
   const match = await findClosestPostByIntent(extracted.intent, intentEmbedding);
 
+  // Calibrated confidence: combine AI extraction confidence with vector similarity
+  const aiConfidence = extracted.confidenceLevel ?? 0.7;
+  const calibratedScore = match.similarityScore * (0.5 + aiConfidence * 0.5);
+
   if (
     match.post &&
-    match.similarityScore > env.AI_SIMILARITY_THRESHOLD
+    calibratedScore > env.AI_SIMILARITY_THRESHOLD
   ) {
     const matchedPostId = match.post.id;
 
@@ -55,14 +74,33 @@ export async function processPainEvent(
         where: { painEventId },
         update: {
           actionTaken: "auto_upvote",
-          confidenceScore: match.similarityScore,
-          status: "approved"
+          confidenceScore: calibratedScore,
+          status: "approved",
+          // Store enhanced metadata
+          metadata: {
+            extractedIntent: extracted.intent,
+            category: extracted.category,
+            sentiment: extracted.sentiment,
+            urgency: extracted.urgency,
+            aiConfidence: aiConfidence,
+            vectorSimilarity: match.similarityScore,
+            keywords: extracted.keywords
+          }
         },
         create: {
           painEventId,
           actionTaken: "auto_upvote",
-          confidenceScore: match.similarityScore,
-          status: "approved"
+          confidenceScore: calibratedScore,
+          status: "approved",
+          metadata: {
+            extractedIntent: extracted.intent,
+            category: extracted.category,
+            sentiment: extracted.sentiment,
+            urgency: extracted.urgency,
+            aiConfidence: aiConfidence,
+            vectorSimilarity: match.similarityScore,
+            keywords: extracted.keywords
+          }
         }
       });
 
@@ -129,14 +167,37 @@ export async function processPainEvent(
       where: { painEventId },
       update: {
         actionTaken: "suggested_new",
-        confidenceScore: match.similarityScore,
-        status: "pending_review"
+        confidenceScore: calibratedScore,
+        status: "pending_review",
+        // Store enhanced metadata including suggested title/description
+        metadata: {
+          extractedIntent: extracted.intent,
+          category: extracted.category,
+          sentiment: extracted.sentiment,
+          urgency: extracted.urgency,
+          aiConfidence: aiConfidence,
+          vectorSimilarity: match.similarityScore,
+          keywords: extracted.keywords,
+          suggestedTitle: extracted.suggestedTitle,
+          suggestedDescription: extracted.suggestedDescription
+        }
       },
       create: {
         painEventId,
         actionTaken: "suggested_new",
-        confidenceScore: match.similarityScore,
-        status: "pending_review"
+        confidenceScore: calibratedScore,
+        status: "pending_review",
+        metadata: {
+          extractedIntent: extracted.intent,
+          category: extracted.category,
+          sentiment: extracted.sentiment,
+          urgency: extracted.urgency,
+          aiConfidence: aiConfidence,
+          vectorSimilarity: match.similarityScore,
+          keywords: extracted.keywords,
+          suggestedTitle: extracted.suggestedTitle,
+          suggestedDescription: extracted.suggestedDescription
+        }
       }
     });
 
@@ -154,7 +215,7 @@ export async function processPainEvent(
   return {
     painEventId,
     status: "needs_triage",
-    similarityScore: match.similarityScore,
+    similarityScore: calibratedScore,
     matchedPostId: match.post?.id ?? null
   };
 }

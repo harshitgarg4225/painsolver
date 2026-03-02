@@ -218,6 +218,7 @@ model AiActionLog {
   actionTaken     AiActionTaken
   confidenceScore Float
   status          AiActionStatus
+  metadata        Json?         // Enhanced AI extraction metadata
   painEvent       PainEvent     @relation(fields: [painEventId], references: [id], onDelete: Cascade)
   votes           Vote[]
   createdAt       DateTime      @default(now())

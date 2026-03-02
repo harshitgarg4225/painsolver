@@ -2370,14 +2370,36 @@
                 return '<option value="' + esc(board.id) + '"' + selected + ">" + esc(board.name) + "</option>";
               })
               .join("");
-            var prefillTitle = (event.recommendedCreate && event.recommendedCreate.title) || event.title || "";
+            // Use AI suggested title/description if available
+            var aiMeta2 = (event.aiActionLog && event.aiActionLog.metadata) || {};
+            var prefillTitle = (event.recommendedCreate && event.recommendedCreate.title) || 
+              aiMeta2.suggestedTitle || event.title || "";
             var prefillDescription =
-              (event.recommendedCreate && event.recommendedCreate.description) || event.description || event.rawText || "";
+              (event.recommendedCreate && event.recommendedCreate.description) || 
+              aiMeta2.suggestedDescription || event.description || event.rawText || "";
             var confidenceText =
               event.confidenceScore == null
                 ? "No confidence score"
                 : "Confidence " + Math.round(Number(event.confidenceScore) * 100) + "%";
             var mergedBadge = event.status === "auto_merged" && event.suggestedPostTitle ? "Merged to " + event.suggestedPostTitle : "";
+
+            // Enhanced AI metadata from aiActionLog
+            var aiMeta = (event.aiActionLog && event.aiActionLog.metadata) || {};
+            var sentimentIcon = {
+              "frustrated": "😤",
+              "neutral": "😐", 
+              "positive": "😊"
+            }[aiMeta.sentiment] || "";
+            var urgencyIcon = {
+              "critical": "🔴",
+              "high": "🟠",
+              "medium": "🟡",
+              "low": "🟢"
+            }[aiMeta.urgency] || "";
+            var categoryBadge = aiMeta.category ? '<span class="ai-badge">' + esc(aiMeta.category) + '</span>' : "";
+            var keywordsHtml = (aiMeta.keywords || []).slice(0, 3).map(function(kw) {
+              return '<span class="ai-keyword">' + esc(kw) + '</span>';
+            }).join("");
 
             return (
               '<article class="triage-item" data-triage-event-id="' +
@@ -2394,16 +2416,22 @@
               esc(triageStatusLabel(event.status)) +
               " • " +
               esc(confidenceText) +
+              (sentimentIcon ? " • " + sentimentIcon : "") +
+              (urgencyIcon ? " " + urgencyIcon : "") +
               " • " +
               esc(fullDate(event.createdAt)) +
               "</p>" +
-              "</div>" +
+              '</div>' +
+              '<div class="triage-badges">' +
+              categoryBadge +
               '<span class="status-pill status-' +
               esc(event.status === "auto_merged" ? "complete" : "under_review") +
               '">' +
               esc(triageStatusLabel(event.status)) +
               "</span>" +
               "</div>" +
+              "</div>" +
+              (keywordsHtml ? '<div class="ai-keywords-row">' + keywordsHtml + '</div>' : '') +
               '<p class="triage-copy">' +
               esc(event.description || event.rawText || "") +
               "</p>" +

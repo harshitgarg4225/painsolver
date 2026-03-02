@@ -1602,6 +1602,46 @@ main {
   margin-top: -2px;
 }
 
+.triage-badges {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.ai-badge {
+  display: inline-block;
+  padding: 4px 10px;
+  font-size: 0.72rem;
+  font-weight: 500;
+  background: linear-gradient(135deg, var(--aqua-100), var(--slate-100));
+  color: var(--aqua-800);
+  border: 1px solid var(--aqua-200);
+  border-radius: var(--radius-sm);
+}
+
+.ai-keywords-row {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 4px;
+}
+
+.ai-keyword {
+  display: inline-block;
+  padding: 3px 8px;
+  font-size: 0.68rem;
+  font-weight: 500;
+  background: var(--slate-100);
+  color: var(--slate-600);
+  border-radius: 12px;
+  text-transform: lowercase;
+}
+
+.ai-keyword:hover {
+  background: var(--slate-200);
+}
+
 .triage-actions-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
