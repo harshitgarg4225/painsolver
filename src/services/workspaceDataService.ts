@@ -3185,7 +3185,8 @@ export async function getPostVoterInsights(postId: string): Promise<WorkspacePos
       id: postId
     },
     select: {
-      id: true
+      id: true,
+      boardId: true
     }
   });
 
@@ -3193,7 +3194,16 @@ export async function getPostVoterInsights(postId: string): Promise<WorkspacePos
     return null;
   }
 
+  // Only fetch posts from the same board to limit scope (merged posts are typically on same board)
+  // Plus any posts that reference or are referenced by this post
   const posts = await prisma.post.findMany({
+    where: {
+      OR: [
+        { boardId: selected.boardId },
+        { mergedIntoPostId: postId },
+        { id: postId }
+      ]
+    },
     select: {
       id: true,
       title: true,
@@ -3284,7 +3294,7 @@ export async function getPostVoterInsights(postId: string): Promise<WorkspacePos
     }
   });
 
-  const voterUserIds = Array.from(new Set(votesInIdea.map((vote) => vote.userId)));
+  const voterUserIds = Array.from(new Set(votesInIdea.map((vote) => vote.userId))).slice(0, 100); // Limit voters to prevent timeout
   const allVotesForVoters = voterUserIds.length
     ? await prisma.vote.findMany({
         where: {
@@ -3292,6 +3302,7 @@ export async function getPostVoterInsights(postId: string): Promise<WorkspacePos
             in: voterUserIds
           }
         },
+        take: 5000, // Limit total votes fetched
         include: {
           post: {
             select: {
@@ -3394,7 +3405,8 @@ export async function getPostVoterInsights(postId: string): Promise<WorkspacePos
     .filter((item): item is WorkspacePostVoterInsightView => Boolean(item))
     .sort((a, b) => {
       return b.companyMrr - a.companyMrr || a.userName.localeCompare(b.userName);
-    });
+    })
+    .slice(0, 100); // Limit to top 100 voters to prevent timeouts
 
   const companyMrrById = new Map<string, number>();
   voters.forEach((voter) => {
