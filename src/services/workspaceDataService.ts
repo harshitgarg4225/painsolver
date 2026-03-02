@@ -184,6 +184,7 @@ export interface CompanyChangelogEntryView {
 const postInclude = Prisma.validator<Prisma.PostInclude>()({
   comments: {
     orderBy: { createdAt: "desc" },
+    take: 50, // Limit comments to prevent slow queries
     include: {
       author: {
         select: {
@@ -3453,6 +3454,7 @@ export async function listFeedbackForCompany(input: {
   const posts = await prisma.post.findMany({
     where,
     orderBy: feedbackOrderBy(input.sort),
+    take: 200, // Limit results for performance
     include: postInclude
   });
 
@@ -3477,6 +3479,7 @@ export async function listCustomerRelationships(input?: {
 
   const [posts, votes] = await Promise.all([
     prisma.post.findMany({
+      take: 1000, // Limit for performance
       select: {
         id: true,
         title: true,
@@ -3499,6 +3502,7 @@ export async function listCustomerRelationships(input?: {
             }
           : undefined
       },
+      take: 5000, // Limit for performance
       include: {
         user: {
           include: {

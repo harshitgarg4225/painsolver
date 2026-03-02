@@ -32,7 +32,11 @@ function withServerlessPoolDefaults(rawUrl: string | undefined): string | undefi
       parsed.searchParams.set("connection_limit", "1");
     }
     if (!parsed.searchParams.has("pool_timeout")) {
-      parsed.searchParams.set("pool_timeout", "30");
+      parsed.searchParams.set("pool_timeout", "20");
+    }
+    // Add connect timeout to fail fast on cold starts
+    if (!parsed.searchParams.has("connect_timeout")) {
+      parsed.searchParams.set("connect_timeout", "15");
     }
     if (
       (parsed.hostname.includes("pooler.") || parsed.hostname.includes("supabase")) &&
@@ -46,21 +50,23 @@ function withServerlessPoolDefaults(rawUrl: string | undefined): string | undefi
 }
 
 const datasourceUrl = withServerlessPoolDefaults(process.env.DATABASE_URL);
-const prismaClient =
-  globalThis.__painsolverPrisma ??
-  new PrismaClient(
-    datasourceUrl
+
+function createPrismaClient(): PrismaClient {
+  return new PrismaClient({
+    datasources: datasourceUrl
       ? {
-          datasources: {
-            db: {
-              url: datasourceUrl
-            }
+          db: {
+            url: datasourceUrl
           }
         }
-      : undefined
-  );
+      : undefined,
+    log: process.env.NODE_ENV === "development" ? ["warn", "error"] : ["error"]
+  });
+}
 
 // Cache globally to reuse across warm invocations in serverless
-globalThis.__painsolverPrisma = prismaClient;
+if (!globalThis.__painsolverPrisma) {
+  globalThis.__painsolverPrisma = createPrismaClient();
+}
 
-export const prisma = prismaClient;
+export const prisma = globalThis.__painsolverPrisma;
