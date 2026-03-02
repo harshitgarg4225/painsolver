@@ -818,8 +818,7 @@ async function ensureNotificationPreferences(
   });
 }
 
-async function computeBoardAccess(
-  tx: PrismaClient | Prisma.TransactionClient,
+function computeBoardAccess(
   board: { id: string; visibility: string; isPrivate: boolean; allowedSegments: string[] },
   actor: WorkspaceActor,
   actorUser:
@@ -829,7 +828,7 @@ async function computeBoardAccess(
       }
     | null,
   requestStatuses?: Map<string, "pending" | "approved" | "rejected">
-): Promise<WorkspaceBoardAccess> {
+): WorkspaceBoardAccess {
   if (actor.role === "member" || actor.role === "admin") {
     return accessFromFlags({ canRead: true, canPost: true, canRequest: false });
   }
@@ -858,17 +857,7 @@ async function computeBoardAccess(
     (board.allowedSegments.length === 0 ||
       board.allowedSegments.some((segment) => actorSegments.includes(segment.toLowerCase())));
 
-  let latestStatus = requestStatuses?.get(board.id);
-  if (!latestStatus) {
-    const latestRequest = await tx.accessRequest.findFirst({
-      where: {
-        userId: user.id,
-        boardId: board.id
-      },
-      orderBy: { createdAt: "desc" }
-    });
-    latestStatus = latestRequest?.status ?? undefined;
-  }
+  const latestStatus = requestStatuses?.get(board.id);
 
   const requestApproved = latestStatus === "approved";
   const canRead = visibility === "private" ? requestApproved : segmentAllowed || requestApproved;
@@ -911,7 +900,7 @@ export async function listBoardsForActor(actorCtx: ActorContext | undefined): Pr
 
   const result: WorkspaceBoardView[] = [];
   for (const board of boards) {
-    const access = await computeBoardAccess(prisma, board, actor, actorRecord.user, requestMap);
+    const access = computeBoardAccess(board, actor, actorRecord.user, requestMap);
     result.push({
       id: board.id,
       name: board.name,
@@ -981,7 +970,7 @@ export async function getBoardAccessForActor(
   }
 
   const actorRecord = actor.isAuthenticated ? await upsertActorUser(prisma, actor) : { user: null };
-  return computeBoardAccess(prisma, board, actor, actorRecord.user);
+  return computeBoardAccess(board, actor, actorRecord.user);
 }
 
 export async function listBoardSettingsForCompany(): Promise<
@@ -1145,7 +1134,7 @@ export async function listFeedbackForBoard(input: {
 
   const actor = asWorkspaceActor(input.actor);
   const actorRecord = actor.isAuthenticated ? await upsertActorUser(prisma, actor) : { user: null };
-  const access = await computeBoardAccess(prisma, board, actor, actorRecord.user);
+  const access = computeBoardAccess(board, actor, actorRecord.user);
 
   if (!access.canRead) {
     return { posts: [], access };
@@ -1193,7 +1182,7 @@ export async function listRoadmapForBoard(input: {
 
   const actor = asWorkspaceActor(input.actor);
   const actorRecord = actor.isAuthenticated ? await upsertActorUser(prisma, actor) : { user: null };
-  const access = await computeBoardAccess(prisma, board, actor, actorRecord.user);
+  const access = computeBoardAccess(board, actor, actorRecord.user);
 
   if (!access.canRead) {
     return {
@@ -1533,7 +1522,7 @@ export async function votePostAsActor(input: {
     return { post: null, access: null };
   }
 
-  const access = await computeBoardAccess(prisma, post.board, actor, actorUser);
+  const access = computeBoardAccess(post.board, actor, actorUser);
   if (!access.canPost) {
     return { post: null, access };
   }
@@ -1590,7 +1579,7 @@ export async function createPostAsActor(input: {
     return { post: null, access: null };
   }
 
-  const access = await computeBoardAccess(prisma, board, actor, actorUser);
+  const access = computeBoardAccess(board, actor, actorUser);
   if (!access.canPost) {
     return { post: null, access };
   }
@@ -1627,7 +1616,7 @@ export async function createPostAsActor(input: {
       include: postInclude
     });
   }, {
-    isolationLevel: Prisma.TransactionIsolationLevel.Serializable
+    isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted
   });
 
   return {
@@ -1744,7 +1733,7 @@ export async function addCommentAsActor(input: {
     return { comment: null, access: null };
   }
 
-  const access = await computeBoardAccess(prisma, post.board, actor, actorUser);
+  const access = computeBoardAccess(post.board, actor, actorUser);
   if (!access.canPost) {
     return { comment: null, access };
   }
@@ -1783,7 +1772,7 @@ export async function addCommentAsActor(input: {
 
     return comment;
   }, {
-    isolationLevel: Prisma.TransactionIsolationLevel.Serializable
+    isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted
   });
 
   return { comment: mapComment(created), access };
@@ -1821,7 +1810,7 @@ export async function createAccessRequestAsActor(input: {
     return { request: null, access: null };
   }
 
-  const access = await computeBoardAccess(prisma, board, actorForUpsert, actorRecord.user);
+  const access = computeBoardAccess(board, actorForUpsert, actorRecord.user);
   if (!access.canRequest) {
     return { request: null, access };
   }
@@ -2106,7 +2095,7 @@ export async function updateAccessRequestStatus(input: {
 
     return request;
   }, {
-    isolationLevel: Prisma.TransactionIsolationLevel.Serializable
+    isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted
   });
 
   return {
@@ -2184,7 +2173,7 @@ export async function updatePostForCompany(input: {
       include: postInclude
     });
   }, {
-    isolationLevel: Prisma.TransactionIsolationLevel.Serializable
+    isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted
   });
 
   return updatedPost ? mapPost(updatedPost, { includePrivateComments: true }) : null;
@@ -2224,7 +2213,7 @@ export async function bulkUpdatePosts(input: {
       });
     }
   }, {
-    isolationLevel: Prisma.TransactionIsolationLevel.Serializable
+    isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted
   });
 
   const updated = await prisma.post.findMany({
@@ -2289,7 +2278,7 @@ export async function mergePosts(input: {
       target: mapPost(nextTarget, { includePrivateComments: true })
     };
   }, {
-    isolationLevel: Prisma.TransactionIsolationLevel.Serializable
+    isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted
   });
 
   return result;
@@ -2342,7 +2331,7 @@ export async function unmergePost(sourcePostId: string): Promise<{ source: Works
       target: mapPost(nextTarget, { includePrivateComments: true })
     };
   }, {
-    isolationLevel: Prisma.TransactionIsolationLevel.Serializable
+    isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted
   });
 
   return result;
@@ -2977,7 +2966,7 @@ export async function createIdeaFromPainEvent(input: {
 
     return created;
   }, {
-    isolationLevel: Prisma.TransactionIsolationLevel.Serializable
+    isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted
   });
 
   return {
@@ -3063,7 +3052,7 @@ export async function mergePainEventIntoPost(input: {
       }
     });
   }, {
-    isolationLevel: Prisma.TransactionIsolationLevel.Serializable
+    isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted
   });
 
   return true;
@@ -3130,7 +3119,7 @@ export async function createChangelogEntry(input: {
       }
     });
   }, {
-    isolationLevel: Prisma.TransactionIsolationLevel.Serializable
+    isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted
   });
 
   return {
@@ -3165,7 +3154,7 @@ export async function getPostForActor(input: {
 
   const actor = asWorkspaceActor(input.actor);
   const actorUser = actor.isAuthenticated ? await upsertActorUser(prisma, actor) : { user: null };
-  const access = await computeBoardAccess(prisma, post.board, actor, actorUser.user);
+  const access = computeBoardAccess(post.board, actor, actorUser.user);
 
   if (!access.canRead) {
     return { post: null, access };

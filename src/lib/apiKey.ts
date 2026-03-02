@@ -2,6 +2,10 @@ import crypto from "crypto";
 
 import { Prisma } from "@prisma/client";
 import { prisma } from "../db/prisma";
+import { redisConnection } from "../config/redis";
+
+const API_KEY_CACHE_TTL_SECONDS = 60;
+const API_KEY_CACHE_PREFIX = "apicred:";
 
 export function hashApiKey(apiKey: string): string {
   return crypto.createHash("sha256").update(apiKey).digest("hex");
@@ -75,6 +79,21 @@ export async function getApiCredentialByApiKey(apiKey: string): Promise<ApiCrede
   }
 
   const keyHash = hashApiKey(apiKey);
+  const cacheKey = `${API_KEY_CACHE_PREFIX}${keyHash}`;
+
+  // Try Redis cache first
+  try {
+    const cached = await redisConnection.get(cacheKey);
+    if (cached !== null) {
+      if (cached === "null") {
+        return null;
+      }
+      return JSON.parse(cached) as ApiCredentialAuth;
+    }
+  } catch {
+    // Redis unavailable - fall through to DB
+  }
+
   const credential = await prisma.apiCredential.findUnique({
     where: { keyHash },
     select: {
@@ -86,15 +105,29 @@ export async function getApiCredentialByApiKey(apiKey: string): Promise<ApiCrede
   });
 
   if (!credential) {
+    // Cache miss result too to avoid repeated DB hits for invalid keys
+    try {
+      await redisConnection.set(cacheKey, "null", "EX", API_KEY_CACHE_TTL_SECONDS);
+    } catch {
+      // Redis unavailable - continue without cache
+    }
     return null;
   }
 
-  return {
+  const result: ApiCredentialAuth = {
     id: credential.id,
     name: credential.name,
     isActive: credential.isActive,
     scopes: normalizeScopes(credential.scopes)
   };
+
+  try {
+    await redisConnection.set(cacheKey, JSON.stringify(result), "EX", API_KEY_CACHE_TTL_SECONDS);
+  } catch {
+    // Redis unavailable - continue without cache
+  }
+
+  return result;
 }
 
 export async function isApiKeyValid(apiKey: string): Promise<boolean> {

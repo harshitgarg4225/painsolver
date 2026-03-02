@@ -118,7 +118,7 @@ export async function ingestFreshdeskSignal(
       }
     });
   }, {
-    isolationLevel: Prisma.TransactionIsolationLevel.Serializable
+    isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted
   });
 
   await aiProcessingQueue.add("process-pain-event", {

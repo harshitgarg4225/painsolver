@@ -663,7 +663,7 @@ export async function ensureBootstrapData(): Promise<void> {
 
     return posts;
   }, {
-    isolationLevel: Prisma.TransactionIsolationLevel.Serializable
+    isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted
   });
 
   await prisma.notification.create({

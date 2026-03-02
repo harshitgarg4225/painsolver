@@ -275,7 +275,7 @@ votesRoutes.post("/delete", async (req, res) => {
       data: adjustment
     });
   }, {
-    isolationLevel: Prisma.TransactionIsolationLevel.Serializable
+    isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted
   });
 
   res.status(200).json({ ok: true });

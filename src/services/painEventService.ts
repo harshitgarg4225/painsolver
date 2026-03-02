@@ -113,7 +113,7 @@ export async function processPainEvent(
         }
       });
     }, {
-      isolationLevel: Prisma.TransactionIsolationLevel.Serializable
+      isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted
     });
 
     return {
@@ -148,7 +148,7 @@ export async function processPainEvent(
       }
     });
   }, {
-    isolationLevel: Prisma.TransactionIsolationLevel.Serializable
+    isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted
   });
 
   return {

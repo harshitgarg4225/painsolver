@@ -186,7 +186,7 @@ painEventsRoutes.post("/merge", requireApiKey, async (req, res) => {
 
       return updatedPainEvent;
     }, {
-      isolationLevel: Prisma.TransactionIsolationLevel.Serializable
+      isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted
     });
 
     res.status(200).json({ painEvent: formatPainEvent(result) });
@@ -289,7 +289,7 @@ painEventsRoutes.post("/create_post", requireApiKey, async (req, res) => {
 
       return post;
     }, {
-      isolationLevel: Prisma.TransactionIsolationLevel.Serializable
+      isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted
     });
 
     res.status(201).json({ post: result });

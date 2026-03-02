@@ -150,6 +150,6 @@ export async function createOrUpgradeVote(
       action: "already_explicit"
     };
   }, {
-    isolationLevel: Prisma.TransactionIsolationLevel.Serializable
+    isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted
   });
 }

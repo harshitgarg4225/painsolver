@@ -157,7 +157,7 @@ dashboardRoutes.post("/posts", async (req, res) => {
       }
     });
   }, {
-    isolationLevel: Prisma.TransactionIsolationLevel.Serializable
+    isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted
   });
 
   res.status(201).json({ post });
@@ -277,7 +277,7 @@ dashboardRoutes.post("/pain-events/:id/merge", async (req, res) => {
         }
       });
     }, {
-      isolationLevel: Prisma.TransactionIsolationLevel.Serializable
+      isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted
     });
 
     res.status(200).json({ painEvent: result });
@@ -368,7 +368,7 @@ dashboardRoutes.post("/pain-events/:id/create-post", async (req, res) => {
 
       return post;
     }, {
-      isolationLevel: Prisma.TransactionIsolationLevel.Serializable
+      isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted
     });
 
     res.status(201).json({ post: result });

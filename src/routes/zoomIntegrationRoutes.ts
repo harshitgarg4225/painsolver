@@ -314,7 +314,7 @@ zoomIntegrationRoutes.post("/import-transcripts", requireCompanyWriteAccess, asy
           }
         });
       }, {
-        isolationLevel: Prisma.TransactionIsolationLevel.Serializable
+        isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted
       });
 
       if (!painEvent) {

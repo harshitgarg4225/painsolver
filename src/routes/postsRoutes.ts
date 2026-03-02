@@ -243,7 +243,7 @@ postsRoutes.post("/create", requireApiKey, async (req, res) => {
         }
       });
     }, {
-      isolationLevel: Prisma.TransactionIsolationLevel.Serializable
+      isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted
     });
 
     res.status(201).json({ post: formatPost(post) });

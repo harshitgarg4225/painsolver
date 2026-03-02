@@ -152,7 +152,7 @@ usersRoutes.post("/create_or_update", requireApiKey, async (req, res) => {
         }
       });
     }, {
-      isolationLevel: Prisma.TransactionIsolationLevel.Serializable
+      isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted
     });
 
     res.status(200).json({ user: formatUser(user) });

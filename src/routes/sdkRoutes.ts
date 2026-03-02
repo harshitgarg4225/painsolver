@@ -231,7 +231,7 @@ async function upsertIdentity(
       };
     },
     {
-      isolationLevel: Prisma.TransactionIsolationLevel.Serializable
+      isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted
     }
   );
 }

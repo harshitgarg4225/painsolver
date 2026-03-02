@@ -1,5 +1,6 @@
 import path from "path";
 
+import compression from "compression";
 import express from "express";
 import helmet from "helmet";
 
@@ -40,6 +41,7 @@ app.use(
     }
   })
 );
+app.use(compression());
 app.use(express.json({ limit: "30mb" }));
 app.use(attachRequestId);
 app.use(resolveApiCredential);
@@ -100,33 +102,35 @@ app.get("/install", (req, res) => {
 </html>`);
 });
 
-app.use("/demo-assets", express.static(path.resolve(process.cwd(), "src/public/demo")));
+const staticCacheOptions = { maxAge: "1h", etag: true };
+
+app.use("/demo-assets", express.static(path.resolve(process.cwd(), "src/public/demo"), staticCacheOptions));
 app.get("/demo", (_req, res) => {
   const demoPath = path.resolve(process.cwd(), "src/public/demo/index.html");
   res.sendFile(demoPath);
 });
 
-app.use("/portal-assets", express.static(path.resolve(process.cwd(), "src/public/portal")));
+app.use("/portal-assets", express.static(path.resolve(process.cwd(), "src/public/portal"), staticCacheOptions));
 app.get("/portal", (_req, res) => {
   const portalPath = path.resolve(process.cwd(), "src/public/portal/index.html");
   res.sendFile(portalPath);
 });
 
-app.use("/docs-assets", express.static(path.resolve(process.cwd(), "src/public/docs")));
+app.use("/docs-assets", express.static(path.resolve(process.cwd(), "src/public/docs"), staticCacheOptions));
 app.get("/docs", (_req, res) => {
   const docsPath = path.resolve(process.cwd(), "src/public/docs/index.html");
   res.sendFile(docsPath);
 });
 
-app.use("/company-assets", express.static(path.resolve(process.cwd(), "src/public/company")));
+app.use("/company-assets", express.static(path.resolve(process.cwd(), "src/public/company"), staticCacheOptions));
 app.get("/company", (_req, res) => {
   const companyPath = path.resolve(process.cwd(), "src/public/company/index.html");
   res.sendFile(companyPath);
 });
 
-app.use("/uploads", express.static(path.resolve(process.cwd(), "src/public/uploads")));
+app.use("/uploads", express.static(path.resolve(process.cwd(), "src/public/uploads"), staticCacheOptions));
 
-app.use("/admin", express.static(path.resolve(process.cwd(), "src/public/admin")));
+app.use("/admin", express.static(path.resolve(process.cwd(), "src/public/admin"), staticCacheOptions));
 app.get("/dashboard", (_req, res) => {
   const dashboardPath = path.resolve(process.cwd(), "src/public/company/index.html");
   res.sendFile(dashboardPath);

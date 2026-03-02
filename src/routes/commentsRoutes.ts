@@ -5,7 +5,9 @@ import { prisma } from "../db/prisma";
 import { requireApiKey } from "../middleware/requireApiKey";
 
 const listCommentsSchema = z.object({
-  postID: z.string().min(1)
+  postID: z.string().min(1),
+  limit: z.coerce.number().min(1).max(200).default(50),
+  cursor: z.string().optional()
 });
 
 const createCommentSchema = z.object({
@@ -51,9 +53,12 @@ commentsRoutes.post("/list", requireApiKey, async (req, res) => {
     return;
   }
 
+  const take = parsed.data.limit;
   const comments = await prisma.comment.findMany({
     where: { postId: parsed.data.postID },
     orderBy: { createdAt: "asc" },
+    take: take + 1,
+    ...(parsed.data.cursor ? { cursor: { id: parsed.data.cursor }, skip: 1 } : {}),
     include: {
       author: {
         select: {
@@ -66,7 +71,14 @@ commentsRoutes.post("/list", requireApiKey, async (req, res) => {
     }
   });
 
-  res.status(200).json({ comments: comments.map((comment) => formatComment(comment)) });
+  const hasMore = comments.length > take;
+  const page = hasMore ? comments.slice(0, take) : comments;
+  const nextCursor = hasMore ? page[page.length - 1]?.id : undefined;
+
+  res.status(200).json({
+    comments: page.map((comment) => formatComment(comment)),
+    nextCursor
+  });
 });
 
 commentsRoutes.post("/create", requireApiKey, async (req, res) => {
