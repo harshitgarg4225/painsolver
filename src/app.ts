@@ -122,6 +122,12 @@ app.get("/docs", (_req, res) => {
   res.sendFile(docsPath);
 });
 
+app.use("/install-assets", express.static(path.resolve(process.cwd(), "src/public/install"), staticCacheOptions));
+app.get("/install", (_req, res) => {
+  const installPath = path.resolve(process.cwd(), "src/public/install/index.html");
+  res.sendFile(installPath);
+});
+
 app.use("/company-assets", express.static(path.resolve(process.cwd(), "src/public/company"), staticCacheOptions));
 app.get("/company", (_req, res) => {
   const companyPath = path.resolve(process.cwd(), "src/public/company/index.html");

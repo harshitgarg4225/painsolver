@@ -1,0 +1,420 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Quick Setup - PainSolver</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:FILL@0" rel="stylesheet" />
+    <link rel="stylesheet" href="/install-assets/install.css" />
+  </head>
+  <body>
+    <header class="install-header">
+      <div class="brand">
+        <div class="logo"></div>
+        <span>PainSolver</span>
+      </div>
+      <nav class="header-nav">
+        <a href="/docs" class="btn ghost">Docs</a>
+        <a href="/portal" class="btn ghost">Portal</a>
+        <a href="/company" class="btn">Dashboard</a>
+      </nav>
+    </header>
+
+    <main class="install-main">
+      <!-- Progress indicator -->
+      <div class="progress-bar">
+        <div class="progress-track">
+          <div class="progress-fill" id="progress-fill"></div>
+        </div>
+        <div class="progress-steps">
+          <button class="progress-step active" data-step="1">
+            <span class="step-num">1</span>
+            <span class="step-label">Company</span>
+          </button>
+          <button class="progress-step" data-step="2">
+            <span class="step-num">2</span>
+            <span class="step-label">Tools</span>
+          </button>
+          <button class="progress-step" data-step="3">
+            <span class="step-num">3</span>
+            <span class="step-label">Setup</span>
+          </button>
+          <button class="progress-step" data-step="4">
+            <span class="step-num">4</span>
+            <span class="step-label">Install</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Step 1: Company Info -->
+      <section class="wizard-step active" id="step-1">
+        <div class="step-content">
+          <div class="step-icon">
+            <span class="material-symbols-outlined">business</span>
+          </div>
+          <h1>Let's set up your feedback board</h1>
+          <p class="step-desc">Tell us a bit about your company so we can optimize your experience.</p>
+
+          <form class="wizard-form" id="company-form">
+            <div class="form-group">
+              <label for="company-name">Company Name</label>
+              <input type="text" id="company-name" placeholder="Acme Inc." required />
+            </div>
+
+            <div class="form-group">
+              <label for="board-name">Board Name</label>
+              <input type="text" id="board-name" placeholder="Feature Requests" value="Feature Requests" />
+              <span class="form-hint">This will be visible to your customers</span>
+            </div>
+
+            <div class="form-group">
+              <label>Monthly Recurring Revenue (MRR)</label>
+              <div class="radio-cards">
+                <label class="radio-card">
+                  <input type="radio" name="mrr-range" value="0-10k" checked />
+                  <span class="radio-content">
+                    <strong>$0 - $10K</strong>
+                    <small>Early stage</small>
+                  </span>
+                </label>
+                <label class="radio-card">
+                  <input type="radio" name="mrr-range" value="10k-50k" />
+                  <span class="radio-content">
+                    <strong>$10K - $50K</strong>
+                    <small>Growing</small>
+                  </span>
+                </label>
+                <label class="radio-card">
+                  <input type="radio" name="mrr-range" value="50k-200k" />
+                  <span class="radio-content">
+                    <strong>$50K - $200K</strong>
+                    <small>Scaling</small>
+                  </span>
+                </label>
+                <label class="radio-card">
+                  <input type="radio" name="mrr-range" value="200k+" />
+                  <span class="radio-content">
+                    <strong>$200K+</strong>
+                    <small>Enterprise</small>
+                  </span>
+                </label>
+              </div>
+            </div>
+
+            <button type="submit" class="btn primary large">
+              Continue
+              <span class="material-symbols-outlined">arrow_forward</span>
+            </button>
+          </form>
+        </div>
+      </section>
+
+      <!-- Step 2: Tools -->
+      <section class="wizard-step" id="step-2">
+        <div class="step-content">
+          <div class="step-icon">
+            <span class="material-symbols-outlined">integration_instructions</span>
+          </div>
+          <h1>Which tools do you use?</h1>
+          <p class="step-desc">We'll help you connect these to automatically capture customer feedback.</p>
+
+          <form class="wizard-form" id="tools-form">
+            <div class="form-group">
+              <label>Customer Support</label>
+              <div class="checkbox-cards">
+                <label class="checkbox-card">
+                  <input type="checkbox" name="tools" value="freshdesk" />
+                  <span class="checkbox-content">
+                    <span class="tool-icon freshdesk"></span>
+                    <strong>Freshdesk</strong>
+                  </span>
+                </label>
+                <label class="checkbox-card">
+                  <input type="checkbox" name="tools" value="zendesk" />
+                  <span class="checkbox-content">
+                    <span class="tool-icon zendesk"></span>
+                    <strong>Zendesk</strong>
+                  </span>
+                </label>
+                <label class="checkbox-card">
+                  <input type="checkbox" name="tools" value="intercom" />
+                  <span class="checkbox-content">
+                    <span class="tool-icon intercom"></span>
+                    <strong>Intercom</strong>
+                  </span>
+                </label>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label>Communication</label>
+              <div class="checkbox-cards">
+                <label class="checkbox-card">
+                  <input type="checkbox" name="tools" value="slack" />
+                  <span class="checkbox-content">
+                    <span class="tool-icon slack"></span>
+                    <strong>Slack</strong>
+                  </span>
+                </label>
+                <label class="checkbox-card">
+                  <input type="checkbox" name="tools" value="zoom" />
+                  <span class="checkbox-content">
+                    <span class="tool-icon zoom"></span>
+                    <strong>Zoom</strong>
+                  </span>
+                </label>
+                <label class="checkbox-card">
+                  <input type="checkbox" name="tools" value="teams" />
+                  <span class="checkbox-content">
+                    <span class="tool-icon teams"></span>
+                    <strong>MS Teams</strong>
+                  </span>
+                </label>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label>Billing & Revenue</label>
+              <div class="checkbox-cards">
+                <label class="checkbox-card">
+                  <input type="checkbox" name="tools" value="stripe" />
+                  <span class="checkbox-content">
+                    <span class="tool-icon stripe"></span>
+                    <strong>Stripe</strong>
+                  </span>
+                </label>
+                <label class="checkbox-card">
+                  <input type="checkbox" name="tools" value="chargebee" />
+                  <span class="checkbox-content">
+                    <span class="tool-icon chargebee"></span>
+                    <strong>Chargebee</strong>
+                  </span>
+                </label>
+              </div>
+            </div>
+
+            <div class="form-actions">
+              <button type="button" class="btn ghost" onclick="goToStep(1)">
+                <span class="material-symbols-outlined">arrow_back</span>
+                Back
+              </button>
+              <button type="submit" class="btn primary large">
+                Continue
+                <span class="material-symbols-outlined">arrow_forward</span>
+              </button>
+            </div>
+          </form>
+        </div>
+      </section>
+
+      <!-- Step 3: Current Process -->
+      <section class="wizard-step" id="step-3">
+        <div class="step-content">
+          <div class="step-icon">
+            <span class="material-symbols-outlined">psychology</span>
+          </div>
+          <h1>How do you currently collect feedback?</h1>
+          <p class="step-desc">This helps us recommend the best setup for your workflow.</p>
+
+          <form class="wizard-form" id="process-form">
+            <div class="form-group">
+              <div class="radio-cards vertical">
+                <label class="radio-card large">
+                  <input type="radio" name="current-process" value="nothing" checked />
+                  <span class="radio-content">
+                    <span class="material-symbols-outlined">sentiment_dissatisfied</span>
+                    <div>
+                      <strong>We don't really collect feedback yet</strong>
+                      <small>Starting fresh - perfect! We'll set up everything you need.</small>
+                    </div>
+                  </span>
+                </label>
+                <label class="radio-card large">
+                  <input type="radio" name="current-process" value="scattered" />
+                  <span class="radio-content">
+                    <span class="material-symbols-outlined">scatter_plot</span>
+                    <div>
+                      <strong>Feedback is scattered across tools</strong>
+                      <small>Slack messages, emails, support tickets... it's everywhere.</small>
+                    </div>
+                  </span>
+                </label>
+                <label class="radio-card large">
+                  <input type="radio" name="current-process" value="spreadsheet" />
+                  <span class="radio-content">
+                    <span class="material-symbols-outlined">table_chart</span>
+                    <div>
+                      <strong>We use spreadsheets or Notion</strong>
+                      <small>Manual tracking that's hard to keep updated.</small>
+                    </div>
+                  </span>
+                </label>
+                <label class="radio-card large">
+                  <input type="radio" name="current-process" value="competitor" />
+                  <span class="radio-content">
+                    <span class="material-symbols-outlined">swap_horiz</span>
+                    <div>
+                      <strong>We're switching from another tool</strong>
+                      <small>Coming from Canny, UserVoice, Productboard, etc.</small>
+                    </div>
+                  </span>
+                </label>
+              </div>
+            </div>
+
+            <div class="form-actions">
+              <button type="button" class="btn ghost" onclick="goToStep(2)">
+                <span class="material-symbols-outlined">arrow_back</span>
+                Back
+              </button>
+              <button type="submit" class="btn primary large">
+                Create My Board
+                <span class="material-symbols-outlined">auto_awesome</span>
+              </button>
+            </div>
+          </form>
+        </div>
+      </section>
+
+      <!-- Step 4: Installation -->
+      <section class="wizard-step" id="step-4">
+        <div class="step-content wide">
+          <div class="step-icon success">
+            <span class="material-symbols-outlined">check_circle</span>
+          </div>
+          <h1>Your board is ready!</h1>
+          <p class="step-desc">Here's everything you need to start collecting feedback.</p>
+
+          <div class="setup-grid">
+            <!-- Quick Stats -->
+            <div class="setup-card highlight">
+              <h3>
+                <span class="material-symbols-outlined">dashboard</span>
+                Your Setup
+              </h3>
+              <div class="setup-stats">
+                <div class="stat">
+                  <span class="stat-value" id="stat-board-name">Feature Requests</span>
+                  <span class="stat-label">Board Name</span>
+                </div>
+                <div class="stat">
+                  <span class="stat-value" id="stat-tools-count">0</span>
+                  <span class="stat-label">Integrations</span>
+                </div>
+              </div>
+              <div class="setup-actions">
+                <a href="/company" class="btn primary">
+                  Open Dashboard
+                  <span class="material-symbols-outlined">arrow_forward</span>
+                </a>
+              </div>
+            </div>
+
+            <!-- SDK Install -->
+            <div class="setup-card">
+              <h3>
+                <span class="material-symbols-outlined">code</span>
+                Install Widget
+              </h3>
+              <p>Add this snippet to your website to show the feedback widget:</p>
+              <div class="code-block">
+                <button class="copy-btn" type="button" onclick="copyCode('sdk-code')">Copy</button>
+                <pre id="sdk-code"><code>&lt;script src="https://painsolver.vercel.app/sdk/painsolver.js"&gt;&lt;/script&gt;
+&lt;script&gt;
+  PainSolver("init", {
+    apiBaseUrl: "https://painsolver.vercel.app",
+    boardToken: "<span id="board-token-placeholder">YOUR_BOARD_TOKEN</span>"
+  });
+
+  // Identify logged-in users (optional but recommended)
+  PainSolver("identify", {
+    user: { email: "user@example.com", name: "User Name" },
+    company: { name: "Company", monthlySpend: 100 },
+    hash: "HMAC_FROM_YOUR_BACKEND"
+  });
+
+  PainSolver("render", { selector: "#feedback-widget" });
+&lt;/script&gt;
+&lt;div id="feedback-widget"&gt;&lt;/div&gt;</code></pre>
+              </div>
+            </div>
+
+            <!-- API Credentials -->
+            <div class="setup-card">
+              <h3>
+                <span class="material-symbols-outlined">key</span>
+                API Credentials
+              </h3>
+              <p>Use these for backend integrations and HMAC signing:</p>
+              <div class="credential-row">
+                <label>API Key</label>
+                <div class="credential-value">
+                  <code id="api-key-display">Loading...</code>
+                  <button class="icon-btn" onclick="copyText('api-key-display')">
+                    <span class="material-symbols-outlined">content_copy</span>
+                  </button>
+                </div>
+              </div>
+              <div class="credential-row">
+                <label>Client Secret (for HMAC)</label>
+                <div class="credential-value">
+                  <code id="client-secret-display">Loading...</code>
+                  <button class="icon-btn" onclick="copyText('client-secret-display')">
+                    <span class="material-symbols-outlined">content_copy</span>
+                  </button>
+                </div>
+              </div>
+              <p class="warning-text">
+                <span class="material-symbols-outlined">warning</span>
+                Keep these secret! Never expose in client-side code.
+              </p>
+            </div>
+
+            <!-- Integrations -->
+            <div class="setup-card" id="integrations-card">
+              <h3>
+                <span class="material-symbols-outlined">link</span>
+                Connect Integrations
+              </h3>
+              <p>Connect your tools to automatically capture feedback:</p>
+              <div class="integration-list" id="integration-list">
+                <!-- Populated by JS -->
+              </div>
+            </div>
+          </div>
+
+          <div class="next-steps">
+            <h3>What's Next?</h3>
+            <div class="next-step-cards">
+              <a href="/docs#identify" class="next-step-card">
+                <span class="material-symbols-outlined">person_add</span>
+                <div>
+                  <strong>Set up user identification</strong>
+                  <small>Link feedback to customer MRR</small>
+                </div>
+              </a>
+              <a href="/company" class="next-step-card">
+                <span class="material-symbols-outlined">inbox</span>
+                <div>
+                  <strong>Explore AI Inbox</strong>
+                  <small>Triage feedback automatically</small>
+                </div>
+              </a>
+              <a href="/docs#changelog-widget" class="next-step-card">
+                <span class="material-symbols-outlined">campaign</span>
+                <div>
+                  <strong>Add changelog widget</strong>
+                  <small>Announce new features</small>
+                </div>
+              </a>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <script src="/install-assets/install.js"></script>
+  </body>
+</html>
+
