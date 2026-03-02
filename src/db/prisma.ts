@@ -60,8 +60,7 @@ const prismaClient =
       : undefined
   );
 
-if (process.env.NODE_ENV !== "production") {
-  globalThis.__painsolverPrisma = prismaClient;
-}
+// Cache globally to reuse across warm invocations in serverless
+globalThis.__painsolverPrisma = prismaClient;
 
 export const prisma = prismaClient;
