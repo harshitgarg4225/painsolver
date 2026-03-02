@@ -421,14 +421,14 @@
     var rows = insights.voters.map(function (voter) {
       var otherIdeasList = (voter.otherUpvotedIdeas || [])
         .map(function (idea) {
-          return idea.title + " (" + idea.boardName + ")";
+          return (idea.title || "Untitled") + " (" + (idea.boardName || "Unknown") + ")";
         })
         .join("; ");
 
       return [
-        escapeCsvField(voter.userName),
-        escapeCsvField(voter.userEmail),
-        escapeCsvField(voter.companyName),
+        escapeCsvField(voter.userName || "Unknown"),
+        escapeCsvField(voter.userEmail || ""),
+        escapeCsvField(voter.companyName || "Unknown"),
         voter.companyMrr || 0,
         voter.userCreatedAt ? new Date(voter.userCreatedAt).toLocaleDateString() : "",
         (voter.voteTypesInIdea || []).join(", "),
@@ -1357,23 +1357,27 @@
               .join("")
           : '<p class="muted">No other upvotes yet.</p>';
 
+        var safeUserName = voter.userName || "Unknown";
+        var safeUserEmail = voter.userEmail || "";
+        var safeCompanyName = voter.companyName || "Unknown";
+        
         return (
           '<article class="voter-card voter-card-expanded">' +
           '<div class="voter-card-header">' +
-          '<div class="voter-avatar">' + esc(voter.userName.charAt(0).toUpperCase()) + '</div>' +
+          '<div class="voter-avatar">' + esc(safeUserName.charAt(0).toUpperCase()) + '</div>' +
           '<div class="voter-info">' +
-          '<strong class="voter-name">' + esc(voter.userName) + '</strong>' +
-          '<span class="voter-email">' + esc(voter.userEmail) + '</span>' +
+          '<strong class="voter-name">' + esc(safeUserName) + '</strong>' +
+          '<span class="voter-email">' + esc(safeUserEmail) + '</span>' +
           '</div>' +
           '<div class="voter-mrr-badge">' +
-          '<span class="mrr-value">' + esc(currency(voter.companyMrr)) + '</span>' +
+          '<span class="mrr-value">' + esc(currency(voter.companyMrr || 0)) + '</span>' +
           '<span class="mrr-label">MRR</span>' +
           '</div>' +
           '</div>' +
           '<div class="voter-details-grid">' +
           '<div class="voter-detail">' +
           '<span class="ms">business</span>' +
-          '<div><strong>Company</strong><span>' + esc(voter.companyName) + '</span></div>' +
+          '<div><strong>Company</strong><span>' + esc(safeCompanyName) + '</span></div>' +
           '</div>' +
           '<div class="voter-detail">' +
           '<span class="ms">calendar_today</span>' +
