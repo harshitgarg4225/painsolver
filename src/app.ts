@@ -60,47 +60,8 @@ app.get("/sdk/painsolver.js", (_req, res) => {
   res.sendFile(sdkFilePath);
 });
 
-app.get("/install", (req, res) => {
-  const host = `${req.protocol}://${req.get("host") ?? "localhost:3000"}`;
-  res.type("html").send(`
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>PainSolver Install</title>
-    <style>
-      body { font-family: "Space Grotesk", ui-sans-serif, sans-serif; margin: 24px; background: #fff; color: #101010; }
-      pre { background: #f3f7f3; border: 1px solid #d8e2d5; padding: 14px; border-radius: 8px; overflow: auto; }
-      a { color: #2f4024; font-weight: 600; }
-    </style>
-  </head>
-  <body>
-    <h1>PainSolver Install Snippet</h1>
-    <p>Use this snippet after your backend issues a scoped board token and secure identify/SSO payload.</p>
-    <pre>&lt;script src="${host}/sdk/painsolver.js"&gt;&lt;/script&gt;
-&lt;div id="painsolver-board"&gt;&lt;/div&gt;
-&lt;div id="painsolver-changelog"&gt;&lt;/div&gt;
-&lt;script&gt;
-  PainSolver("init", {
-    apiBaseUrl: "${host}",
-    boardToken: "SERVER_GENERATED_BOARD_TOKEN"
-  });
-    PainSolver("identify", {
-      user: { email: "user@example.com", name: "User", appUserId: "u_1" },
-      company: { name: "acme" },
-      hash: "SERVER_GENERATED_HMAC_SHA256"
-    }).then(function () {
-      PainSolver("render", { selector: "#painsolver-board" });
-      PainSolver("initChangelog", { selector: "#painsolver-changelog" });
-    });
-&lt;/script&gt;</pre>
-    <p><a href="/docs">Open Developer Docs</a></p>
-    <p><a href="/portal">Open Customer Portal</a></p>
-    <p><a href="/company">Open Company Dashboard</a></p>
-  </body>
-</html>`);
-});
+// Old install redirect - now served from /install-assets
+// app.get("/install-old", ...) removed in favor of interactive wizard
 
 const staticCacheOptions = { maxAge: "1h", etag: true };
 
@@ -126,6 +87,22 @@ app.use("/install-assets", express.static(path.resolve(process.cwd(), "src/publi
 app.get("/install", (_req, res) => {
   const installPath = path.resolve(process.cwd(), "src/public/install/index.html");
   res.sendFile(installPath);
+});
+
+app.use("/roadmap-assets", express.static(path.resolve(process.cwd(), "src/public/roadmap"), staticCacheOptions));
+app.get("/roadmap", (_req, res) => {
+  const roadmapPath = path.resolve(process.cwd(), "src/public/roadmap/index.html");
+  res.sendFile(roadmapPath);
+});
+app.get("/roadmap/:slug", (_req, res) => {
+  const roadmapPath = path.resolve(process.cwd(), "src/public/roadmap/index.html");
+  res.sendFile(roadmapPath);
+});
+
+app.use("/profile-assets", express.static(path.resolve(process.cwd(), "src/public/profile"), staticCacheOptions));
+app.get("/profile", (_req, res) => {
+  const profilePath = path.resolve(process.cwd(), "src/public/profile/index.html");
+  res.sendFile(profilePath);
 });
 
 app.use("/company-assets", express.static(path.resolve(process.cwd(), "src/public/company"), staticCacheOptions));

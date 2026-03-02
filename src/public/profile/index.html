@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>My Profile - PainSolver</title>
+    <meta name="description" content="View your submissions, votes, and activity." />
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:FILL@0" rel="stylesheet" />
+    <link rel="stylesheet" href="/profile-assets/profile.css" />
+  </head>
+  <body>
+    <header class="profile-header">
+      <div class="header-content">
+        <div class="brand">
+          <a href="/portal" class="brand-link">
+            <div class="logo"></div>
+            <span class="brand-name">PainSolver</span>
+          </a>
+        </div>
+        <nav class="header-nav">
+          <a href="/portal" class="nav-link">
+            <span class="material-symbols-outlined">forum</span>
+            Feedback
+          </a>
+          <a href="/roadmap" class="nav-link">
+            <span class="material-symbols-outlined">timeline</span>
+            Roadmap
+          </a>
+          <a href="/profile" class="nav-link active">
+            <span class="material-symbols-outlined">person</span>
+            Profile
+          </a>
+        </nav>
+      </div>
+    </header>
+
+    <main class="profile-main">
+      <!-- User Info Section -->
+      <section class="user-section">
+        <div class="user-card" id="user-card">
+          <div class="user-avatar" id="user-avatar">
+            <span class="material-symbols-outlined">person</span>
+          </div>
+          <div class="user-info">
+            <h1 class="user-name" id="user-name">Loading...</h1>
+            <p class="user-email" id="user-email"></p>
+            <p class="user-company" id="user-company"></p>
+          </div>
+          <div class="user-stats">
+            <div class="stat">
+              <span class="stat-value" id="stat-submissions">0</span>
+              <span class="stat-label">Submissions</span>
+            </div>
+            <div class="stat">
+              <span class="stat-value" id="stat-votes">0</span>
+              <span class="stat-label">Votes</span>
+            </div>
+            <div class="stat">
+              <span class="stat-value" id="stat-comments">0</span>
+              <span class="stat-label">Comments</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Tab Navigation -->
+      <section class="tabs-section">
+        <div class="tabs-container">
+          <button class="tab active" data-tab="submissions">
+            <span class="material-symbols-outlined">lightbulb</span>
+            My Submissions
+            <span class="tab-count" id="tab-submissions-count">0</span>
+          </button>
+          <button class="tab" data-tab="votes">
+            <span class="material-symbols-outlined">thumb_up</span>
+            My Votes
+            <span class="tab-count" id="tab-votes-count">0</span>
+          </button>
+          <button class="tab" data-tab="comments">
+            <span class="material-symbols-outlined">chat</span>
+            My Comments
+            <span class="tab-count" id="tab-comments-count">0</span>
+          </button>
+        </div>
+      </section>
+
+      <!-- Tab Content -->
+      <section class="content-section">
+        <!-- Submissions Tab -->
+        <div class="tab-content active" id="content-submissions">
+          <div class="content-header">
+            <h2>Ideas I've Submitted</h2>
+            <a href="/portal" class="btn ghost small">
+              <span class="material-symbols-outlined">add</span>
+              Submit New
+            </a>
+          </div>
+          <div class="posts-list" id="submissions-list">
+            <div class="loading-state">
+              <span class="material-symbols-outlined spinning">progress_activity</span>
+              <p>Loading your submissions...</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Votes Tab -->
+        <div class="tab-content" id="content-votes">
+          <div class="content-header">
+            <h2>Ideas I've Voted On</h2>
+          </div>
+          <div class="posts-list" id="votes-list">
+            <div class="loading-state">
+              <span class="material-symbols-outlined spinning">progress_activity</span>
+              <p>Loading your votes...</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Comments Tab -->
+        <div class="tab-content" id="content-comments">
+          <div class="content-header">
+            <h2>My Comments</h2>
+          </div>
+          <div class="comments-list" id="comments-list">
+            <div class="loading-state">
+              <span class="material-symbols-outlined spinning">progress_activity</span>
+              <p>Loading your comments...</p>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!-- Post Detail Modal -->
+    <div class="modal-backdrop" id="post-modal">
+      <div class="modal-content">
+        <button class="modal-close" id="modal-close">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+        <div class="modal-body" id="modal-body">
+          <!-- Populated by JS -->
+        </div>
+      </div>
+    </div>
+
+    <footer class="profile-footer">
+      <p>Powered by <a href="https://painsolver.vercel.app" target="_blank">PainSolver</a></p>
+    </footer>
+
+    <script src="/profile-assets/profile.js"></script>
+  </body>
+</html>
+

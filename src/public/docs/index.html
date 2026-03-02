@@ -31,6 +31,9 @@
         </label>
         <nav id="doc-nav-list" aria-label="Docs sections">
           <a href="#install">Install</a>
+          <a href="#react-install">React / Next.js</a>
+          <a href="#vue-install">Vue.js</a>
+          <a href="#node-backend">Node.js Backend</a>
           <a href="#identify">Identify</a>
           <a href="#company-data">Company Data</a>
           <a href="#custom-fields">Custom Fields</a>
@@ -75,6 +78,302 @@
     PainSolver("initChangelog", { selector: "#painsolver-changelog" });
   });
 &lt;/script&gt;</code></pre>
+        </section>
+
+        <section id="react-install" data-title="React / Next.js">
+          <h2>React / Next.js Installation</h2>
+          <p>
+            For React and Next.js apps, create a reusable component and load the SDK dynamically.
+          </p>
+          <h3>1. Create the FeedbackWidget component</h3>
+          <pre><button class="copy-btn" type="button">Copy</button><code>// components/FeedbackWidget.tsx
+'use client'; // For Next.js App Router
+
+import { useEffect, useRef } from 'react';
+
+declare global {
+  interface Window {
+    PainSolver: (action: string, options?: any) => Promise&lt;any&gt;;
+  }
+}
+
+interface FeedbackWidgetProps {
+  boardToken: string;
+  user?: {
+    email: string;
+    name: string;
+    appUserId?: string;
+  };
+  company?: {
+    name: string;
+    monthlySpend?: number;
+  };
+  hash?: string;
+}
+
+export function FeedbackWidget({ boardToken, user, company, hash }: FeedbackWidgetProps) {
+  const containerRef = useRef&lt;HTMLDivElement&gt;(null);
+  const initialized = useRef(false);
+
+  useEffect(() =&gt; {
+    if (initialized.current) return;
+    initialized.current = true;
+
+    // Load SDK script
+    const script = document.createElement('script');
+    script.src = 'https://painsolver.vercel.app/sdk/painsolver.js';
+    script.async = true;
+    script.onload = async () =&gt; {
+      // Initialize
+      await window.PainSolver('init', {
+        apiBaseUrl: 'https://painsolver.vercel.app',
+        boardToken
+      });
+
+      // Identify user if provided
+      if (user &amp;&amp; hash) {
+        await window.PainSolver('identify', { user, company, hash });
+      }
+
+      // Render widget
+      if (containerRef.current) {
+        await window.PainSolver('render', { 
+          selector: `#${containerRef.current.id}` 
+        });
+      }
+    };
+    document.body.appendChild(script);
+
+    return () =&gt; {
+      document.body.removeChild(script);
+    };
+  }, [boardToken, user, company, hash]);
+
+  return &lt;div id="painsolver-feedback" ref={containerRef} /&gt;;
+}</code></pre>
+          <h3>2. Use in your app</h3>
+          <pre><button class="copy-btn" type="button">Copy</button><code>// app/feedback/page.tsx (Next.js) or App.tsx (React)
+import { FeedbackWidget } from '@/components/FeedbackWidget';
+
+export default function FeedbackPage() {
+  // Get these from your auth context
+  const user = { email: 'user@example.com', name: 'John Doe' };
+  const company = { name: 'Acme Inc', monthlySpend: 499 };
+  const hash = 'YOUR_HMAC_FROM_API'; // Generate server-side!
+
+  return (
+    &lt;div className="container mx-auto py-8"&gt;
+      &lt;h1&gt;Feature Requests&lt;/h1&gt;
+      &lt;FeedbackWidget
+        boardToken="YOUR_BOARD_TOKEN"
+        user={user}
+        company={company}
+        hash={hash}
+      /&gt;
+    &lt;/div&gt;
+  );
+}</code></pre>
+          <h3>3. Generate HMAC server-side (API route)</h3>
+          <pre><button class="copy-btn" type="button">Copy</button><code>// app/api/painsolver-hash/route.ts (Next.js App Router)
+import { createHmac } from 'crypto';
+import { NextResponse } from 'next/server';
+
+export async function POST(request: Request) {
+  const { email } = await request.json();
+  
+  const hash = createHmac('sha256', process.env.PAINSOLVER_CLIENT_SECRET!)
+    .update(email)
+    .digest('hex');
+
+  return NextResponse.json({ hash });
+}</code></pre>
+        </section>
+
+        <section id="vue-install" data-title="Vue.js">
+          <h2>Vue.js Installation</h2>
+          <p>
+            For Vue apps, create a composable and component to manage the SDK lifecycle.
+          </p>
+          <h3>1. Create the composable</h3>
+          <pre><button class="copy-btn" type="button">Copy</button><code>// composables/usePainSolver.ts
+import { ref, onMounted, onUnmounted } from 'vue';
+
+declare global {
+  interface Window {
+    PainSolver: (action: string, options?: any) =&gt; Promise&lt;any&gt;;
+  }
+}
+
+export function usePainSolver(boardToken: string) {
+  const isLoaded = ref(false);
+  let script: HTMLScriptElement | null = null;
+
+  onMounted(() =&gt; {
+    script = document.createElement('script');
+    script.src = 'https://painsolver.vercel.app/sdk/painsolver.js';
+    script.async = true;
+    script.onload = async () =&gt; {
+      await window.PainSolver('init', {
+        apiBaseUrl: 'https://painsolver.vercel.app',
+        boardToken
+      });
+      isLoaded.value = true;
+    };
+    document.body.appendChild(script);
+  });
+
+  onUnmounted(() =&gt; {
+    if (script) document.body.removeChild(script);
+  });
+
+  const identify = async (user: any, company: any, hash: string) =&gt; {
+    if (!isLoaded.value) return;
+    await window.PainSolver('identify', { user, company, hash });
+  };
+
+  const render = async (selector: string) =&gt; {
+    if (!isLoaded.value) return;
+    await window.PainSolver('render', { selector });
+  };
+
+  return { isLoaded, identify, render };
+}</code></pre>
+          <h3>2. Create the component</h3>
+          <pre><button class="copy-btn" type="button">Copy</button><code>&lt;!-- components/FeedbackWidget.vue --&gt;
+&lt;script setup lang="ts"&gt;
+import { watch } from 'vue';
+import { usePainSolver } from '@/composables/usePainSolver';
+
+const props = defineProps&lt;{
+  boardToken: string;
+  user?: { email: string; name: string };
+  company?: { name: string; monthlySpend?: number };
+  hash?: string;
+}&gt;();
+
+const { isLoaded, identify, render } = usePainSolver(props.boardToken);
+
+watch(isLoaded, async (loaded) =&gt; {
+  if (!loaded) return;
+  
+  if (props.user &amp;&amp; props.hash) {
+    await identify(props.user, props.company, props.hash);
+  }
+  await render('#painsolver-widget');
+});
+&lt;/script&gt;
+
+&lt;template&gt;
+  &lt;div id="painsolver-widget"&gt;
+    &lt;p v-if="!isLoaded"&gt;Loading feedback widget...&lt;/p&gt;
+  &lt;/div&gt;
+&lt;/template&gt;</code></pre>
+        </section>
+
+        <section id="node-backend" data-title="Node.js Backend">
+          <h2>Node.js Backend Setup</h2>
+          <p>
+            Generate secure HMAC hashes and board tokens server-side to protect your client secret.
+          </p>
+          <h3>1. Install dependencies</h3>
+          <pre><button class="copy-btn" type="button">Copy</button><code>npm install crypto</code></pre>
+          <h3>2. HMAC generation utility</h3>
+          <pre><button class="copy-btn" type="button">Copy</button><code>// utils/painsolver.ts
+import crypto from 'crypto';
+
+const CLIENT_SECRET = process.env.PAINSOLVER_CLIENT_SECRET!;
+const API_KEY = process.env.PAINSOLVER_API_KEY!;
+
+/**
+ * Generate HMAC hash for user identification
+ * Pass this to the frontend for the identify() call
+ */
+export function generateIdentifyHash(email: string): string {
+  return crypto
+    .createHmac('sha256', CLIENT_SECRET)
+    .update(email)
+    .digest('hex');
+}
+
+/**
+ * Generate a board-scoped token for the widget
+ */
+export async function generateBoardToken(boardId: string): Promise&lt;string&gt; {
+  const response = await fetch('https://painsolver.vercel.app/api/v1/sdk/board-token', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${API_KEY}`
+    },
+    body: JSON.stringify({ boardId })
+  });
+  
+  const data = await response.json();
+  return data.token;
+}
+
+/**
+ * Create an SSO token for secure authentication
+ */
+export async function createSSOToken(user: {
+  email: string;
+  name: string;
+}, company?: {
+  name: string;
+  monthlySpend?: number;
+}): Promise&lt;string&gt; {
+  const response = await fetch('https://painsolver.vercel.app/api/v1/sdk/sso-token', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${API_KEY}`
+    },
+    body: JSON.stringify({
+      user,
+      company,
+      expiresInSeconds: 3600
+    })
+  });
+  
+  const data = await response.json();
+  return data.token;
+}</code></pre>
+          <h3>3. Express.js API endpoint example</h3>
+          <pre><button class="copy-btn" type="button">Copy</button><code>// routes/painsolver.ts
+import { Router } from 'express';
+import { generateIdentifyHash, generateBoardToken } from '../utils/painsolver';
+
+const router = Router();
+
+// Endpoint for frontend to get HMAC hash
+router.post('/hash', async (req, res) =&gt; {
+  const { email } = req.body;
+  
+  if (!email) {
+    return res.status(400).json({ error: 'Email required' });
+  }
+  
+  const hash = generateIdentifyHash(email);
+  res.json({ hash });
+});
+
+// Endpoint to get board token
+router.post('/board-token', async (req, res) =&gt; {
+  const { boardId } = req.body;
+  
+  try {
+    const token = await generateBoardToken(boardId);
+    res.json({ token });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to generate token' });
+  }
+});
+
+export default router;</code></pre>
+          <h3>Environment variables</h3>
+          <pre><button class="copy-btn" type="button">Copy</button><code># .env
+PAINSOLVER_API_KEY=ps_live_xxxxxxxxxxxx
+PAINSOLVER_CLIENT_SECRET=psc_xxxxxxxxxxxx</code></pre>
         </section>
 
         <section id="identify" data-title="Identify">

@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Product Roadmap - PainSolver</title>
+    <meta name="description" content="See what's planned, in progress, and recently shipped." />
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:FILL@0" rel="stylesheet" />
+    <link rel="stylesheet" href="/roadmap-assets/roadmap.css" />
+  </head>
+  <body>
+    <header class="roadmap-header">
+      <div class="header-content">
+        <div class="brand">
+          <div class="logo"></div>
+          <div class="brand-text">
+            <span class="company-name" id="company-name">Product</span>
+            <span class="roadmap-label">Roadmap</span>
+          </div>
+        </div>
+        <div class="header-actions">
+          <a href="/portal" class="btn ghost">
+            <span class="material-symbols-outlined">forum</span>
+            Submit Feedback
+          </a>
+        </div>
+      </div>
+    </header>
+
+    <main class="roadmap-main">
+      <section class="roadmap-hero">
+        <h1>Product Roadmap</h1>
+        <p class="hero-subtitle">See what we're working on and what's coming next. Vote on features to help us prioritize.</p>
+        
+        <div class="roadmap-stats" id="roadmap-stats">
+          <div class="stat">
+            <span class="stat-value" id="stat-planned">-</span>
+            <span class="stat-label">Planned</span>
+          </div>
+          <div class="stat">
+            <span class="stat-value" id="stat-progress">-</span>
+            <span class="stat-label">In Progress</span>
+          </div>
+          <div class="stat">
+            <span class="stat-value" id="stat-complete">-</span>
+            <span class="stat-label">Complete</span>
+          </div>
+        </div>
+
+        <div class="board-selector">
+          <label for="board-select">
+            <span class="material-symbols-outlined">dashboard</span>
+            Board:
+          </label>
+          <select id="board-select">
+            <option value="">Loading...</option>
+          </select>
+        </div>
+      </section>
+
+      <section class="roadmap-board">
+        <div class="roadmap-column" id="column-planned">
+          <div class="column-header planned">
+            <span class="material-symbols-outlined">lightbulb</span>
+            <h2>Planned</h2>
+            <span class="column-count" id="count-planned">0</span>
+          </div>
+          <div class="column-body" id="items-planned">
+            <div class="loading-state">
+              <span class="material-symbols-outlined spinning">progress_activity</span>
+              <p>Loading roadmap...</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="roadmap-column" id="column-progress">
+          <div class="column-header progress">
+            <span class="material-symbols-outlined">engineering</span>
+            <h2>In Progress</h2>
+            <span class="column-count" id="count-progress">0</span>
+          </div>
+          <div class="column-body" id="items-progress">
+            <div class="loading-state">
+              <span class="material-symbols-outlined spinning">progress_activity</span>
+              <p>Loading roadmap...</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="roadmap-column" id="column-complete">
+          <div class="column-header complete">
+            <span class="material-symbols-outlined">check_circle</span>
+            <h2>Complete</h2>
+            <span class="column-count" id="count-complete">0</span>
+          </div>
+          <div class="column-body" id="items-complete">
+            <div class="loading-state">
+              <span class="material-symbols-outlined spinning">progress_activity</span>
+              <p>Loading roadmap...</p>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!-- Post Detail Modal -->
+    <div class="modal-backdrop" id="post-modal">
+      <div class="modal-content">
+        <button class="modal-close" id="modal-close">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+        <div class="modal-body" id="modal-body">
+          <!-- Populated by JS -->
+        </div>
+      </div>
+    </div>
+
+    <footer class="roadmap-footer">
+      <p>Powered by <a href="https://painsolver.vercel.app" target="_blank">PainSolver</a></p>
+    </footer>
+
+    <script src="/roadmap-assets/roadmap.js"></script>
+  </body>
+</html>
+

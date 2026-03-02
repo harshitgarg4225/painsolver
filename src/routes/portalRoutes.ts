@@ -142,6 +142,47 @@ portalRoutes.get("/boards", async (req, res) => {
   res.status(200).json({ boards });
 });
 
+// Public roadmap posts endpoint - for /roadmap page
+portalRoutes.get("/boards/:boardId/posts", async (req, res) => {
+  const { boardId } = req.params;
+  const statusParam = req.query.status as string | undefined;
+  const limitParam = req.query.limit ? parseInt(req.query.limit as string, 10) : 100;
+
+  // Parse comma-separated status values
+  const statuses = statusParam ? statusParam.split(",").map((s) => s.trim()) : ["planned", "in_progress", "complete"];
+
+  const posts = await prisma.post.findMany({
+    where: {
+      boardId,
+      status: { in: statuses }
+    },
+    include: {
+      tags: true,
+      _count: {
+        select: {
+          votes: true,
+          comments: true
+        }
+      }
+    },
+    orderBy: [{ status: "asc" }, { createdAt: "desc" }],
+    take: Math.min(limitParam, 200)
+  });
+
+  const formattedPosts = posts.map((post) => ({
+    id: post.id,
+    title: post.title,
+    description: post.body,
+    status: post.status,
+    voteCount: post._count.votes,
+    commentCount: post._count.comments,
+    tags: post.tags.map((t) => ({ id: t.id, name: t.name })),
+    createdAt: post.createdAt
+  }));
+
+  res.status(200).json({ posts: formattedPosts });
+});
+
 portalRoutes.get("/boards/:boardId/feedback", async (req, res) => {
   const parsed = feedbackQuerySchema.safeParse({
     sort: req.query.sort,
@@ -391,5 +432,145 @@ portalRoutes.patch("/notification-preferences", requireAuthenticatedActor, async
   }
 
   res.status(200).json({ preferences });
+});
+
+// User profile endpoints
+portalRoutes.get("/me", async (req, res) => {
+  const actor = getActor(req.actor);
+  
+  if (!actor.isAuthenticated || !actor.email) {
+    res.status(200).json({ user: null });
+    return;
+  }
+
+  const user = await prisma.user.findUnique({
+    where: { email: actor.email },
+    include: {
+      company: true
+    }
+  });
+
+  if (!user) {
+    res.status(200).json({ user: null });
+    return;
+  }
+
+  res.status(200).json({
+    user: {
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      appUserId: user.appUserId,
+      company: user.company ? { name: user.company.name } : null,
+      createdAt: user.createdAt
+    }
+  });
+});
+
+portalRoutes.get("/users/:userId/submissions", async (req, res) => {
+  const { userId } = req.params;
+
+  const posts = await prisma.post.findMany({
+    where: {
+      authorId: userId
+    },
+    include: {
+      board: { select: { id: true, name: true } },
+      _count: {
+        select: {
+          votes: true,
+          comments: true
+        }
+      }
+    },
+    orderBy: { createdAt: "desc" },
+    take: 100
+  });
+
+  const submissions = posts.map((post) => ({
+    id: post.id,
+    title: post.title,
+    description: post.body,
+    status: post.status,
+    voteCount: post._count.votes,
+    commentCount: post._count.comments,
+    board: post.board,
+    boardName: post.board?.name,
+    createdAt: post.createdAt
+  }));
+
+  res.status(200).json({ submissions });
+});
+
+portalRoutes.get("/users/:userId/votes", async (req, res) => {
+  const { userId } = req.params;
+
+  const votes = await prisma.vote.findMany({
+    where: {
+      userId: userId
+    },
+    include: {
+      post: {
+        include: {
+          board: { select: { id: true, name: true } },
+          _count: {
+            select: {
+              votes: true,
+              comments: true
+            }
+          }
+        }
+      }
+    },
+    orderBy: { createdAt: "desc" },
+    take: 100
+  });
+
+  const votedPosts = votes
+    .filter((vote) => vote.post)
+    .map((vote) => ({
+      id: vote.post.id,
+      title: vote.post.title,
+      description: vote.post.body,
+      status: vote.post.status,
+      voteCount: vote.post._count.votes,
+      commentCount: vote.post._count.comments,
+      board: vote.post.board,
+      boardName: vote.post.board?.name,
+      createdAt: vote.post.createdAt,
+      votedAt: vote.createdAt
+    }));
+
+  res.status(200).json({ votes: votedPosts });
+});
+
+portalRoutes.get("/users/:userId/comments", async (req, res) => {
+  const { userId } = req.params;
+
+  const comments = await prisma.comment.findMany({
+    where: {
+      authorId: userId
+    },
+    include: {
+      post: {
+        select: {
+          id: true,
+          title: true
+        }
+      }
+    },
+    orderBy: { createdAt: "desc" },
+    take: 100
+  });
+
+  const userComments = comments.map((comment) => ({
+    id: comment.id,
+    body: comment.body,
+    postId: comment.postId,
+    postTitle: comment.post?.title,
+    createdAt: comment.createdAt
+  }));
+
+  res.status(200).json({ comments: userComments });
 });
 
