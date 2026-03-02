@@ -49,7 +49,7 @@ Notes:
 - Changelog media uploads use Supabase Storage in deployment.
 - BullMQ worker is a long-running process and should run separately from Vercel functions for continuous queue processing.
 
-## Canny-Competitor Surface
+## PainSolver Platform Surface
 
 ### Install / Widget
 - SDK script: `GET /sdk/painsolver.js`
@@ -75,7 +75,7 @@ Notes:
 - Changelog unseen state: `GET /api/v1/sdk/changelog/unseen`
 - Mark changelog seen: `POST /api/v1/sdk/changelog/seen`
 
-### Core API (Canny-style)
+### Core API (Feedback Platform Style)
 All endpoints below support `apiKey` in JSON body or `Authorization: Bearer <apiKey>` unless noted.
 
 - Boards

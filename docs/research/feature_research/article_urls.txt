@@ -1,0 +1,2 @@
+# External references intentionally redacted from repository text branding.
+# Full source URLs are tracked outside this codebase.
