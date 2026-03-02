@@ -1262,52 +1262,76 @@
 
         var votedTitles = (voter.votedIdeaPostTitles || []).join(", ");
         var otherIdeas = voter.otherUpvotedIdeas || [];
+        var joinedDate = voter.userCreatedAt ? fullDate(voter.userCreatedAt) : "Unknown";
+        var otherIdeasCount = otherIdeas.length;
+        
         var otherIdeasHtml = otherIdeas.length
           ? otherIdeas
               .map(function (idea) {
+                var statusClass = "status-" + (idea.status || "under_review").replace(/_/g, "-");
                 return (
-                  '<button class="ghost small" data-open-post-id="' +
+                  '<button class="voter-idea-link" data-open-post-id="' +
                   esc(idea.postId) +
                   '" data-open-board-id="' +
                   esc(idea.boardId) +
                   '" type="button">' +
-                  esc(idea.title) +
-                  " • " +
-                  esc(idea.boardName) +
-                  "</button>"
+                  '<span class="voter-idea-title">' + esc(idea.title) + '</span>' +
+                  '<span class="voter-idea-meta">' +
+                  '<span class="' + statusClass + '">' + esc(idea.status || "under_review").replace(/_/g, " ") + '</span>' +
+                  ' • ' + esc(idea.boardName) +
+                  (idea.attachedMrr ? ' • ' + esc(currency(idea.attachedMrr)) : '') +
+                  '</span>' +
+                  '</button>'
                 );
               })
               .join("")
           : '<p class="muted">No other upvotes yet.</p>';
 
         return (
-          '<article class="voter-card">' +
-          '<div class="voter-card-head">' +
-          "<strong>" +
-          esc(voter.userName) +
-          "</strong>" +
-          '<span class="status-pill">' +
-          esc(currency(voter.companyMrr)) +
-          " MRR</span>" +
-          "</div>" +
-          '<p class="muted">' +
-          esc(voter.userEmail) +
-          " • " +
-          esc(voter.companyName) +
-          "</p>" +
-          '<p class="muted">Voted on merged nodes: ' +
-          esc(votedTitles || "Current idea") +
-          "</p>" +
-          '<div class="tag-row">' +
-          voteTypes +
-          "</div>" +
-          '<div class="voter-other-ideas">' +
-          '<p class="muted"><strong>Other upvoted ideas</strong></p>' +
+          '<article class="voter-card voter-card-expanded">' +
+          '<div class="voter-card-header">' +
+          '<div class="voter-avatar">' + esc(voter.userName.charAt(0).toUpperCase()) + '</div>' +
+          '<div class="voter-info">' +
+          '<strong class="voter-name">' + esc(voter.userName) + '</strong>' +
+          '<span class="voter-email">' + esc(voter.userEmail) + '</span>' +
+          '</div>' +
+          '<div class="voter-mrr-badge">' +
+          '<span class="mrr-value">' + esc(currency(voter.companyMrr)) + '</span>' +
+          '<span class="mrr-label">MRR</span>' +
+          '</div>' +
+          '</div>' +
+          '<div class="voter-details-grid">' +
+          '<div class="voter-detail">' +
+          '<span class="ms">business</span>' +
+          '<div><strong>Company</strong><span>' + esc(voter.companyName) + '</span></div>' +
+          '</div>' +
+          '<div class="voter-detail">' +
+          '<span class="ms">calendar_today</span>' +
+          '<div><strong>Joined</strong><span>' + esc(joinedDate) + '</span></div>' +
+          '</div>' +
+          '<div class="voter-detail">' +
+          '<span class="ms">thumb_up</span>' +
+          '<div><strong>Other Ideas</strong><span>' + otherIdeasCount + ' upvoted</span></div>' +
+          '</div>' +
+          '<div class="voter-detail">' +
+          '<span class="ms">how_to_vote</span>' +
+          '<div><strong>Vote Type</strong><span>' + voteTypes + '</span></div>' +
+          '</div>' +
+          '</div>' +
+          (votedTitles && votedTitles !== voter.votedIdeaPostTitles[0]
+            ? '<div class="voter-voted-nodes"><span class="muted">Voted on merged nodes:</span> ' + esc(votedTitles) + '</div>'
+            : '') +
+          '<details class="voter-other-ideas-section">' +
+          '<summary>' +
+          '<span class="ms">expand_more</span>' +
+          '<strong>Other Upvoted Ideas</strong>' +
+          '<span class="idea-count">' + otherIdeasCount + '</span>' +
+          '</summary>' +
           '<div class="voter-other-links">' +
           otherIdeasHtml +
-          "</div>" +
-          "</div>" +
-          "</article>"
+          '</div>' +
+          '</details>' +
+          '</article>'
         );
       })
       .join("");

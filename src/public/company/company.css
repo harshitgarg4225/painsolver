@@ -829,6 +829,241 @@ main {
   padding: 10px;
 }
 
+.voter-card-expanded {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: #fff;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.voter-card-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.voter-avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--aqua-600) 0%, var(--aqua-800) 100%);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 1.1rem;
+  flex-shrink: 0;
+}
+
+.voter-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.voter-name {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.voter-email {
+  font-size: 0.8rem;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.voter-mrr-badge {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  padding: 8px 12px;
+  background: var(--aqua-50);
+  border: 1px solid var(--aqua-100);
+  border-radius: var(--radius-sm);
+  flex-shrink: 0;
+}
+
+.voter-mrr-badge .mrr-value {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--aqua-800);
+}
+
+.voter-mrr-badge .mrr-label {
+  font-size: 0.7rem;
+  color: var(--aqua-700);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.voter-details-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+  padding: 12px;
+  background: var(--slate-50);
+  border-radius: var(--radius-sm);
+}
+
+.voter-detail {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.voter-detail .ms {
+  color: var(--aqua-600);
+  font-size: 18px;
+  margin-top: 2px;
+}
+
+.voter-detail div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.voter-detail strong {
+  font-size: 0.7rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  font-weight: 500;
+}
+
+.voter-detail span {
+  font-size: 0.85rem;
+  color: var(--text);
+}
+
+.voter-detail .tag-pill {
+  font-size: 0.72rem;
+  padding: 2px 6px;
+}
+
+.voter-voted-nodes {
+  font-size: 0.8rem;
+  color: var(--text-subtle);
+  padding: 8px 10px;
+  background: var(--slate-50);
+  border-radius: var(--radius-sm);
+}
+
+.voter-other-ideas-section {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.voter-other-ideas-section summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  background: var(--slate-50);
+  cursor: pointer;
+  font-size: 0.85rem;
+  list-style: none;
+}
+
+.voter-other-ideas-section summary::-webkit-details-marker {
+  display: none;
+}
+
+.voter-other-ideas-section summary .ms {
+  color: var(--muted);
+  transition: transform 0.2s;
+}
+
+.voter-other-ideas-section[open] summary .ms {
+  transform: rotate(180deg);
+}
+
+.voter-other-ideas-section summary strong {
+  flex: 1;
+  color: var(--text-subtle);
+}
+
+.voter-other-ideas-section .idea-count {
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 2px 8px;
+  background: var(--aqua-100);
+  color: var(--aqua-800);
+  border-radius: 10px;
+}
+
+.voter-other-links {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  background: var(--line);
+}
+
+.voter-idea-link {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  background: #fff;
+  border: none;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.voter-idea-link:hover {
+  background: var(--aqua-50);
+}
+
+.voter-idea-title {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--text);
+}
+
+.voter-idea-meta {
+  font-size: 0.75rem;
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.voter-idea-meta .status-under-review,
+.voter-idea-meta .status-upcoming,
+.voter-idea-meta .status-backlog,
+.voter-idea-meta .status-planned,
+.voter-idea-meta .status-in-progress,
+.voter-idea-meta .status-complete,
+.voter-idea-meta .status-shipped {
+  font-size: 0.68rem;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 500;
+  text-transform: capitalize;
+}
+
+.voter-idea-meta .status-under-review { background: var(--slate-100); color: var(--slate-600); }
+.voter-idea-meta .status-upcoming { background: #dbeafe; color: #1e40af; }
+.voter-idea-meta .status-backlog { background: var(--slate-100); color: var(--slate-600); }
+.voter-idea-meta .status-planned { background: #dbeafe; color: #1e40af; }
+.voter-idea-meta .status-in-progress { background: #fef3c7; color: #92400e; }
+.voter-idea-meta .status-complete { background: #d1fae5; color: #065f46; }
+.voter-idea-meta .status-shipped { background: #d1fae5; color: #065f46; }
+
 .voter-card-head {
   display: flex;
   align-items: center;
@@ -840,11 +1075,18 @@ main {
   margin-top: 8px;
 }
 
-.voter-other-links {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 6px;
+@media (max-width: 600px) {
+  .voter-details-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .voter-card-header {
+    flex-wrap: wrap;
+  }
+  
+  .voter-mrr-badge {
+    margin-left: auto;
+  }
 }
 
 /* ========================================

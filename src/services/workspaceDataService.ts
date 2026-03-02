@@ -98,6 +98,7 @@ export interface WorkspacePostVoterInsightView {
   userId: string;
   userName: string;
   userEmail: string;
+  userCreatedAt: string;
   companyId: string;
   companyName: string;
   companyMrr: number;
@@ -3266,7 +3267,11 @@ export async function getPostVoterInsights(postId: string): Promise<WorkspacePos
     },
     include: {
       user: {
-        include: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          createdAt: true,
           company: {
             select: {
               id: true,
@@ -3376,6 +3381,7 @@ export async function getPostVoterInsights(postId: string): Promise<WorkspacePos
         userId,
         userName: user.name || user.email,
         userEmail: user.email,
+        userCreatedAt: user.createdAt.toISOString(),
         companyId: user.company.id,
         companyName: user.company.name,
         companyMrr: user.company.monthlySpend,
