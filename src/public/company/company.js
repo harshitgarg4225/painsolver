@@ -388,6 +388,71 @@
     }).format(value || 0);
   }
 
+  function escapeCsvField(value) {
+    if (value === null || value === undefined) {
+      return "";
+    }
+    var str = String(value);
+    if (str.includes(",") || str.includes('"') || str.includes("\n")) {
+      return '"' + str.replace(/"/g, '""') + '"';
+    }
+    return str;
+  }
+
+  function exportVotersToCsv(postId) {
+    var insights = state.voterInsightsByPostId[postId];
+    if (!insights || !insights.voters || !insights.voters.length) {
+      pushToast("error", "No voter data to export.");
+      return;
+    }
+
+    var ideaTitle = insights.canonicalPostTitle || "Idea";
+    var headers = [
+      "Name",
+      "Email",
+      "Company",
+      "MRR",
+      "Joined Date",
+      "Vote Type",
+      "Other Upvoted Ideas Count",
+      "Other Upvoted Ideas"
+    ];
+
+    var rows = insights.voters.map(function (voter) {
+      var otherIdeasList = (voter.otherUpvotedIdeas || [])
+        .map(function (idea) {
+          return idea.title + " (" + idea.boardName + ")";
+        })
+        .join("; ");
+
+      return [
+        escapeCsvField(voter.userName),
+        escapeCsvField(voter.userEmail),
+        escapeCsvField(voter.companyName),
+        voter.companyMrr || 0,
+        voter.userCreatedAt ? new Date(voter.userCreatedAt).toLocaleDateString() : "",
+        (voter.voteTypesInIdea || []).join(", "),
+        (voter.otherUpvotedIdeas || []).length,
+        escapeCsvField(otherIdeasList)
+      ].join(",");
+    });
+
+    var csvContent = headers.join(",") + "\n" + rows.join("\n");
+    var blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    var url = URL.createObjectURL(blob);
+    var link = document.createElement("a");
+    var filename = "voters-" + ideaTitle.toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 30) + "-" + new Date().toISOString().slice(0, 10) + ".csv";
+    link.setAttribute("href", url);
+    link.setAttribute("download", filename);
+    link.style.display = "none";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    pushToast("success", "Exported " + insights.voters.length + " voters to CSV.");
+  }
+
   function shortDate(value) {
     if (!value) {
       return "";
@@ -1225,6 +1290,7 @@
     var summary = insights.summary || { totalVoters: 0, uniqueCompanies: 0, totalCompanyMrr: 0 };
 
     el.detailVoterSummary.innerHTML =
+      '<div class="voter-summary-header">' +
       '<article class="voter-summary-card">' +
       '<strong>' +
       esc(summary.totalVoters) +
@@ -1239,6 +1305,10 @@
       esc(mergedIdeaCount) +
       " merged idea nodes</span>" +
       "</article>" +
+      '<button class="ghost small export-voters-btn" data-export-voters type="button">' +
+      '<span class="ms">download</span> Export CSV' +
+      '</button>' +
+      '</div>' +
       '<p class="muted voter-summary-canonical">Canonical idea: <strong>' +
       esc(insights.canonicalPostTitle || "") +
       "</strong></p>";
@@ -3671,6 +3741,20 @@
         }
 
         void openLinkedIdea(boardId, postId);
+      });
+    }
+
+    if (el.detailVoterSummary) {
+      el.detailVoterSummary.addEventListener("click", function (event) {
+        var target = event.target;
+        if (!(target instanceof HTMLElement)) {
+          return;
+        }
+
+        var exportBtn = target.closest("[data-export-voters]");
+        if (exportBtn && state.selectedPostId) {
+          exportVotersToCsv(state.selectedPostId);
+        }
       });
     }
 
