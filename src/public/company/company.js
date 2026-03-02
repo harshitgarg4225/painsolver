@@ -2798,11 +2798,14 @@
   function bindEvents() {
     el.nav.addEventListener("click", function (event) {
       var target = event.target;
-      if (!(target instanceof HTMLElement) || !target.matches(".nav-item")) {
+      if (!(target instanceof HTMLElement)) {
         return;
       }
-
-      var tab = target.getAttribute("data-tab") || "feedback";
+      var navItem = target.closest(".nav-item");
+      if (!navItem) {
+        return;
+      }
+      var tab = navItem.getAttribute("data-tab") || "feedback";
       openTab(tab);
     });
 
