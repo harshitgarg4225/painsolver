@@ -39,6 +39,7 @@ enum BoardVisibility {
 enum PainEventSource {
   freshdesk
   zoom
+  slack
 }
 
 enum PainEventStatus {
@@ -108,6 +109,7 @@ model User {
   notificationPref     NotificationPreference?
   savedFilters         SavedFilter[]
   zoomConnection       ZoomConnection?
+  slackConnection      SlackConnection?
   createdAt            DateTime                @default(now())
   updatedAt            DateTime                @updatedAt
 }
@@ -329,19 +331,24 @@ model SavedFilter {
 }
 
 model AiInboxConfig {
-  id                       String            @id @default(cuid())
-  source                   PainEventSource   @unique
-  routingMode              AiInboxRoutingMode
-  enabled                  Boolean           @default(true)
-  freshdeskDomain          String?
-  freshdeskApiKey          String?           @db.Text
-  freshdeskFilterField     String?
-  freshdeskFilterValue     String?
-  freshdeskFieldCatalog    Json?
-  freshdeskLastFieldSyncAt DateTime?
+  id                        String            @id @default(cuid())
+  source                    PainEventSource   @unique
+  routingMode               AiInboxRoutingMode
+  enabled                   Boolean           @default(true)
+  freshdeskDomain           String?
+  freshdeskApiKey           String?           @db.Text
+  freshdeskFilterField      String?
+  freshdeskFilterValue      String?
+  freshdeskFieldCatalog     Json?
+  freshdeskLastFieldSyncAt  DateTime?
   freshdeskLastTicketSyncAt DateTime?
-  createdAt                DateTime          @default(now())
-  updatedAt                DateTime          @updatedAt
+  slackTeamId               String?
+  slackTeamName             String?
+  slackChannelIds           String[]          @default([])
+  slackChannelNames         String[]          @default([])
+  slackLastSyncAt           DateTime?
+  createdAt                 DateTime          @default(now())
+  updatedAt                 DateTime          @updatedAt
 }
 
 model ZoomConnection {
@@ -362,4 +369,25 @@ model ZoomConnection {
   user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([zoomUserId])
+}
+
+model SlackConnection {
+  id               String   @id @default(cuid())
+  userId           String   @unique
+  slackTeamId      String
+  slackTeamName    String?
+  slackUserId      String
+  slackUserName    String?
+  accessToken      String   @db.Text
+  botUserId        String?
+  scope            String?
+  channelIds       String[] @default([])
+  channelNames     String[] @default([])
+  connectedAt      DateTime @default(now())
+  lastSyncedAt     DateTime?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([slackTeamId])
 }

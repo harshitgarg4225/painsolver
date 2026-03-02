@@ -48,6 +48,10 @@ const envSchema = z.object({
     .string()
     .optional()
     .transform((value) => value !== "false"),
+  SLACK_CLIENT_ID: z.string().default(""),
+  SLACK_CLIENT_SECRET: z.string().default(""),
+  SLACK_REDIRECT_URI: z.string().default("http://localhost:3000/api/integrations/slack/callback"),
+  SLACK_STATE_SECRET: z.string().optional(),
   START_WORKER: z
     .string()
     .optional()

@@ -48,6 +48,18 @@
       connectedAt: null,
       lastSyncedAt: null
     },
+    slackConnection: {
+      connected: false,
+      teamId: null,
+      teamName: null,
+      userId: null,
+      userName: null,
+      channelCount: 0,
+      channelNames: [],
+      connectedAt: null,
+      lastSyncedAt: null
+    },
+    slackChannels: [],
     triageStatus: "needs_triage",
     triageSource: "all",
     triageQuery: "",
@@ -99,6 +111,7 @@
       triage: false,
       freshdesk: false,
       zoom: false,
+      slack: false,
       voterInsights: false,
       customers: false,
       reporting: false
@@ -113,6 +126,7 @@
       triage: "",
       freshdesk: "",
       zoom: "",
+      slack: "",
       voterInsights: "",
       customers: "",
       reportingSummary: "",
@@ -1685,6 +1699,20 @@
     };
   }
 
+  function defaultSlackConnection() {
+    return {
+      connected: false,
+      teamId: null,
+      teamName: null,
+      userId: null,
+      userName: null,
+      channelCount: 0,
+      channelNames: [],
+      connectedAt: null,
+      lastSyncedAt: null
+    };
+  }
+
   function renderIntegrationCards() {
     // Zoom Integration Card
     var zoomCard = document.getElementById("zoom-integration-card");
@@ -1846,6 +1874,92 @@
         '</button>' +
         (freshdeskConnected || freshdesk.hasApiKey || freshdeskDomain
           ? '<button class="ghost" data-freshdesk-disconnect type="button"' + freshdeskBusy + '>' +
+            '<span class="ms">link_off</span> Disconnect</button>'
+          : '');
+    }
+
+    // Slack Integration Card
+    var slackCard = document.getElementById("slack-integration-card");
+    var slackStatusEl = document.getElementById("slack-connection-status");
+    var slackConfigForm = document.getElementById("slack-config-form");
+    var slackStatusDetails = document.getElementById("slack-status-details");
+    var slackActions = document.getElementById("slack-actions");
+
+    if (slackCard && slackStatusEl && slackConfigForm && slackStatusDetails && slackActions) {
+      var slack = state.slackConnection || defaultSlackConnection();
+      var slackConnected = Boolean(slack.connected);
+      var slackBusy = state.loading.slack ? " disabled" : "";
+
+      // Update connection status
+      if (slackConnected) {
+        slackStatusEl.textContent = "✓ Connected to " + (slack.teamName || "Slack");
+        slackStatusEl.className = "connection-status is-connected";
+        slackCard.classList.add("is-connected");
+      } else {
+        slackStatusEl.textContent = "Not connected";
+        slackStatusEl.className = "connection-status";
+        slackCard.classList.remove("is-connected");
+      }
+
+      // Channel selector (only show when connected)
+      if (slackConnected) {
+        var channelOptions = state.slackChannels
+          .map(function (ch) {
+            var isSelected = slack.channelNames.indexOf(ch.name) !== -1;
+            return '<label class="channel-checkbox">' +
+              '<input type="checkbox" data-slack-channel="' + esc(ch.id) + '" data-channel-name="' + esc(ch.name) + '"' +
+              (isSelected ? ' checked' : '') + ' />' +
+              '<span>#' + esc(ch.name) + (ch.isPrivate ? ' 🔒' : '') + '</span>' +
+              '</label>';
+          })
+          .join("");
+
+        slackConfigForm.innerHTML =
+          '<div class="channel-selector">' +
+          '<label class="channel-label">Select channels to monitor:</label>' +
+          '<div class="channel-list">' +
+          (channelOptions || '<span class="muted">No channels found. Click "Fetch Channels" to load.</span>') +
+          '</div>' +
+          '</div>';
+      } else {
+        slackConfigForm.innerHTML = '';
+      }
+
+      // Status details
+      var slackLastSync = slack.lastSyncedAt ? fullDate(slack.lastSyncedAt) : "Never";
+      var slackStatusHtml = "";
+      if (state.errors.slack) {
+        slackStatusHtml = '<div class="integration-status has-error">' + esc(state.errors.slack) + '</div>';
+      } else if (slackConnected) {
+        slackStatusHtml = '<div class="integration-status">' +
+          '<strong>Workspace:</strong> ' + esc(slack.teamName || "Connected") +
+          ' • <strong>Channels:</strong> ' + (slack.channelCount || 0) + ' selected' +
+          ' • <strong>Last sync:</strong> ' + esc(slackLastSync) +
+          '</div>';
+      } else {
+        slackStatusHtml = '<div class="integration-status">Connect your Slack workspace to monitor channels for feedback.</div>';
+      }
+      slackStatusDetails.innerHTML = slackStatusHtml;
+
+      // Action buttons
+      slackActions.innerHTML =
+        '<button class="ghost" data-slack-connect type="button"' + slackBusy + '>' +
+        '<span class="ms">link</span> ' + esc(slackConnected ? "Reconnect" : "Connect Slack") +
+        '</button>' +
+        (slackConnected
+          ? '<button class="ghost" data-slack-fetch-channels type="button"' + slackBusy + '>' +
+            '<span class="ms">sync</span> Fetch Channels</button>'
+          : '') +
+        (slackConnected
+          ? '<button class="primary" data-slack-save-channels type="button"' + slackBusy + '>' +
+            '<span class="ms">save</span> Save Channels</button>'
+          : '') +
+        '<button class="primary" data-slack-import type="button"' +
+        (slackConnected && slack.channelCount > 0 ? "" : " disabled") + slackBusy + '>' +
+        '<span class="ms">download</span> Import Messages' +
+        '</button>' +
+        (slackConnected
+          ? '<button class="ghost" data-slack-disconnect type="button"' + slackBusy + '>' +
             '<span class="ms">link_off</span> Disconnect</button>'
           : '');
     }
@@ -2770,6 +2884,46 @@
       });
   }
 
+  function loadSlackConnectionStatus() {
+    setLoading("slack", true);
+    state.errors.slack = "";
+    renderTriageConfig();
+
+    return request("/api/integrations/slack/status")
+      .then(function (result) {
+        state.slackConnection = result.connection || defaultSlackConnection();
+      })
+      .catch(function (error) {
+        state.slackConnection = defaultSlackConnection();
+        state.errors.slack = error.message || "Failed to load Slack connection status.";
+        if (state.tab === "autopilot") {
+          pushToast("error", state.errors.slack);
+        }
+      })
+      .finally(function () {
+        setLoading("slack", false);
+        renderTriageConfig();
+      });
+  }
+
+  function loadSlackChannels() {
+    setLoading("slack", true);
+    renderTriageConfig();
+
+    return request("/api/integrations/slack/channels")
+      .then(function (result) {
+        state.slackChannels = Array.isArray(result.channels) ? result.channels : [];
+      })
+      .catch(function (error) {
+        state.slackChannels = [];
+        pushToast("error", error.message || "Failed to fetch Slack channels.");
+      })
+      .finally(function () {
+        setLoading("slack", false);
+        renderTriageConfig();
+      });
+  }
+
   function loadTriage() {
     setLoading("triage", true);
     state.errors.triage = "";
@@ -2944,7 +3098,7 @@
 
     if (tab === "autopilot") {
       renderAiInboxViews();
-      void Promise.all([loadTriage(), loadZoomConnectionStatus(), loadFreshdeskStatus()]);
+      void Promise.all([loadTriage(), loadZoomConnectionStatus(), loadFreshdeskStatus(), loadSlackConnectionStatus()]);
     }
 
     if (tab === "reporting") {
@@ -4684,6 +4838,158 @@
             .finally(function () {
               if (disconnectButton instanceof HTMLButtonElement) {
                 setButtonBusy(disconnectButton, false);
+              }
+            });
+          return;
+        }
+      });
+    }
+
+    // Slack integration card event listeners
+    var slackIntegrationCard = document.getElementById("slack-integration-card");
+    if (slackIntegrationCard) {
+      slackIntegrationCard.addEventListener("click", function (event) {
+        var target = event.target;
+        if (!(target instanceof HTMLElement)) {
+          return;
+        }
+
+        var slackConnectButton = target.closest("[data-slack-connect]");
+        if (slackConnectButton) {
+          setLoading("slack", true);
+          renderTriageConfig();
+          request("/api/integrations/slack/connect-url")
+            .then(function (result) {
+              if (!result || !result.url) {
+                throw new Error("Unable to generate Slack connect URL. Make sure SLACK_CLIENT_ID is configured.");
+              }
+              var popup = window.open(result.url, "_blank", "noopener,noreferrer");
+              if (!popup) {
+                window.location.assign(result.url);
+                return;
+              }
+              window.setTimeout(function () {
+                void loadSlackConnectionStatus();
+              }, 1500);
+              window.setTimeout(function () {
+                void loadSlackConnectionStatus();
+                void loadSlackChannels();
+              }, 4500);
+            })
+            .catch(function (error) {
+              pushToast("error", error.message || "Failed to open Slack connect flow.");
+            })
+            .finally(function () {
+              setLoading("slack", false);
+              renderTriageConfig();
+            });
+          return;
+        }
+
+        var slackFetchChannelsButton = target.closest("[data-slack-fetch-channels]");
+        if (slackFetchChannelsButton) {
+          if (slackFetchChannelsButton instanceof HTMLButtonElement) {
+            setButtonBusy(slackFetchChannelsButton, true, "Fetching...");
+          }
+          loadSlackChannels()
+            .finally(function () {
+              if (slackFetchChannelsButton instanceof HTMLButtonElement) {
+                setButtonBusy(slackFetchChannelsButton, false);
+              }
+            });
+          return;
+        }
+
+        var slackSaveChannelsButton = target.closest("[data-slack-save-channels]");
+        if (slackSaveChannelsButton) {
+          var checkboxes = slackIntegrationCard.querySelectorAll("input[data-slack-channel]:checked");
+          var channelIds = [];
+          var channelNames = [];
+          checkboxes.forEach(function (cb) {
+            channelIds.push(cb.getAttribute("data-slack-channel"));
+            channelNames.push(cb.getAttribute("data-channel-name"));
+          });
+
+          if (slackSaveChannelsButton instanceof HTMLButtonElement) {
+            setButtonBusy(slackSaveChannelsButton, true, "Saving...");
+          }
+
+          request("/api/integrations/slack/configure-channels", {
+            method: "POST",
+            body: { channelIds: channelIds, channelNames: channelNames }
+          })
+            .then(function (result) {
+              state.slackConnection = result.connection || state.slackConnection;
+              pushToast("success", "Slack channels saved. " + channelIds.length + " channel(s) selected.");
+              return loadSlackConnectionStatus();
+            })
+            .catch(function (error) {
+              pushToast("error", error.message || "Failed to save Slack channels.");
+            })
+            .finally(function () {
+              if (slackSaveChannelsButton instanceof HTMLButtonElement) {
+                setButtonBusy(slackSaveChannelsButton, false);
+              }
+            });
+          return;
+        }
+
+        var slackImportButton = target.closest("[data-slack-import]");
+        if (slackImportButton) {
+          if (slackImportButton instanceof HTMLButtonElement) {
+            setButtonBusy(slackImportButton, true, "Importing...");
+          }
+          request("/api/integrations/slack/import-messages", {
+            method: "POST",
+            body: { daysBack: 7, maxMessages: 100 }
+          })
+            .then(function (result) {
+              var imported = Number(result.imported || 0);
+              var processed = Number(result.processed || 0);
+              var channelsScanned = Number(result.channelsScanned || 0);
+              pushToast(
+                "success",
+                "Slack: imported " + imported + " messages from " + channelsScanned + " channel(s), processed " + processed + "."
+              );
+              return Promise.all([
+                loadSlackConnectionStatus(),
+                loadTriage(),
+                loadSummary(),
+                loadFeedback(),
+                loadRoadmap(),
+                loadReportingPosts(),
+                loadOpportunities()
+              ]);
+            })
+            .catch(function (error) {
+              pushToast("error", error.message || "Failed to import Slack messages.");
+            })
+            .finally(function () {
+              if (slackImportButton instanceof HTMLButtonElement) {
+                setButtonBusy(slackImportButton, false);
+              }
+            });
+          return;
+        }
+
+        var slackDisconnectButton = target.closest("[data-slack-disconnect]");
+        if (slackDisconnectButton) {
+          if (slackDisconnectButton instanceof HTMLButtonElement) {
+            setButtonBusy(slackDisconnectButton, true, "Disconnecting...");
+          }
+          request("/api/integrations/slack/disconnect", { method: "POST" })
+            .then(function () {
+              state.slackConnection = defaultSlackConnection();
+              state.slackChannels = [];
+              pushToast("success", "Slack disconnected.");
+              return Promise.all([loadSlackConnectionStatus(), loadTriage()]);
+            })
+            .catch(function (error) {
+              pushToast("error", error.message || "Failed to disconnect Slack.");
+            })
+            .finally(function () {
+              if (slackDisconnectButton instanceof HTMLButtonElement) {
+                setButtonBusy(slackDisconnectButton, false);
               }
             });
           return;

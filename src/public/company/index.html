@@ -475,6 +475,7 @@
                   <option value="all">All</option>
                   <option value="freshdesk">Freshdesk</option>
                   <option value="zoom">Zoom</option>
+                  <option value="slack">Slack</option>
                 </select>
               </label>
               <label>
@@ -520,6 +521,38 @@
                   <!-- Populated by JS -->
                 </div>
                 <div class="integration-actions" id="zoom-actions">
+                  <!-- Populated by JS -->
+                </div>
+              </article>
+
+              <!-- Slack Integration Card -->
+              <article class="integration-card" id="slack-integration-card">
+                <div class="integration-header">
+                  <div class="integration-icon slack-icon">
+                    <span class="ms">tag</span>
+                  </div>
+                  <div class="integration-title">
+                    <h4>Slack</h4>
+                    <span class="connection-status" id="slack-connection-status">Not connected</span>
+                  </div>
+                </div>
+                <p class="integration-desc">Monitor Slack channels for customer feedback. Messages are analyzed by AI to create or merge into feature requests on your idea board.</p>
+                <div class="integration-flow">
+                  <div class="flow-step"><span class="ms">chat</span> Message posted</div>
+                  <span class="flow-arrow">→</span>
+                  <div class="flow-step"><span class="ms">filter_alt</span> Channel filtered</div>
+                  <span class="flow-arrow">→</span>
+                  <div class="flow-step"><span class="ms">auto_awesome</span> AI analyzes</div>
+                  <span class="flow-arrow">→</span>
+                  <div class="flow-step"><span class="ms">lightbulb</span> Ideas created</div>
+                </div>
+                <div class="integration-config" id="slack-config-form">
+                  <!-- Populated by JS -->
+                </div>
+                <div class="integration-status" id="slack-status-details">
+                  <!-- Populated by JS -->
+                </div>
+                <div class="integration-actions" id="slack-actions">
                   <!-- Populated by JS -->
                 </div>
               </article>
