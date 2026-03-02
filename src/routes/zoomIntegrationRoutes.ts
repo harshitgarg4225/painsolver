@@ -1,7 +1,8 @@
 import { Prisma } from "@prisma/client";
-import { Router } from "express";
+import { Request, Response, NextFunction, Router } from "express";
 import { z } from "zod";
 
+import { env } from "../config/env";
 import { prisma } from "../db/prisma";
 import { aiProcessingQueue } from "../lib/queue";
 import { scrubPii } from "../lib/pii";
@@ -13,10 +14,16 @@ import {
   createZoomOAuthState,
   exchangeZoomAuthorizationCode,
   fetchZoomProfile,
+  formatTranscriptForAI,
+  handleZoomChallenge,
+  identifyFeedbackSegments,
   listZoomTranscriptImports,
+  parseVttWithSpeakers,
   parseZoomOAuthState,
   refreshZoomAccessToken,
-  ZoomConnectionStatusView
+  verifyZoomWebhookSignature,
+  ZoomConnectionStatusView,
+  ZoomWebhookPayload
 } from "../services/zoomService";
 
 const importTranscriptsSchema = z.object({
@@ -367,4 +374,261 @@ zoomIntegrationRoutes.post("/import-transcripts", requireCompanyWriteAccess, asy
     console.error("Zoom transcript import failed", importError);
     res.status(500).json({ error: "Failed to import Zoom transcripts" });
   }
+});
+
+// =============================================
+// Zoom Webhook (Automated transcript capture)
+// =============================================
+
+// Raw body capture for signature verification
+let zoomRawBodyBuffer: string = "";
+
+function captureZoomRawBody(req: Request, _res: Response, next: NextFunction): void {
+  let data = "";
+  req.setEncoding("utf8");
+  req.on("data", (chunk: string) => {
+    data += chunk;
+  });
+  req.on("end", () => {
+    zoomRawBodyBuffer = data;
+    try {
+      req.body = JSON.parse(data);
+    } catch {
+      req.body = {};
+    }
+    next();
+  });
+}
+
+/**
+ * Zoom webhook endpoint
+ * Configure in Zoom Marketplace App -> Feature -> Event Subscriptions
+ * Event types: recording.completed, recording.transcript_completed
+ */
+zoomIntegrationRoutes.post("/webhook", captureZoomRawBody, async (req, res) => {
+  const payload = req.body as ZoomWebhookPayload;
+
+  // Handle URL validation challenge
+  if (payload.event === "endpoint.url_validation") {
+    const plainToken = (payload.payload as unknown as { plainToken: string })?.plainToken;
+    if (plainToken) {
+      const response = handleZoomChallenge(plainToken);
+      res.status(200).json(response);
+      return;
+    }
+  }
+
+  // Verify webhook signature
+  const signature = req.headers["x-zm-signature"] as string || "";
+  const timestamp = req.headers["x-zm-request-timestamp"] as string || "";
+  
+  if (!verifyZoomWebhookSignature(signature, timestamp, zoomRawBodyBuffer)) {
+    console.warn("[Zoom Webhook] Invalid signature");
+    res.status(401).json({ error: "Invalid signature" });
+    return;
+  }
+
+  // Respond immediately
+  res.status(200).json({ ok: true });
+
+  console.log("[Zoom Webhook] Received event:", payload.event);
+
+  // Handle recording.completed or recording.transcript_completed
+  if (payload.event !== "recording.completed" && payload.event !== "recording.transcript_completed") {
+    console.log("[Zoom Webhook] Ignoring event:", payload.event);
+    return;
+  }
+
+  // Process asynchronously
+  processZoomRecordingEvent(payload).catch((err) => {
+    console.error("[Zoom Webhook] Error processing recording:", err);
+  });
+});
+
+async function processZoomRecordingEvent(payload: ZoomWebhookPayload): Promise<void> {
+  const recording = payload.payload?.object;
+  if (!recording) {
+    console.log("[Zoom Webhook] No recording object in payload");
+    return;
+  }
+
+  const meetingUuid = recording.uuid || String(recording.id || "");
+  if (!meetingUuid) {
+    console.log("[Zoom Webhook] No meeting UUID");
+    return;
+  }
+
+  // Find transcript files
+  const transcriptFiles = (recording.recording_files || []).filter((file) => {
+    const type = String(file.file_type ?? "").toUpperCase();
+    const recordingType = String(file.recording_type ?? "").toLowerCase();
+    const extension = String(file.file_extension ?? "").toLowerCase();
+    const status = String(file.status ?? "").toLowerCase();
+    
+    if (status && status !== "completed") return false;
+    return type === "TRANSCRIPT" || recordingType.includes("transcript") || extension === "vtt";
+  });
+
+  if (transcriptFiles.length === 0) {
+    console.log("[Zoom Webhook] No transcript files found");
+    return;
+  }
+
+  // Find a user with Zoom connection for this account
+  const accountId = payload.payload?.account_id;
+  const connection = await prisma.zoomConnection.findFirst({
+    where: accountId ? { zoomAccountId: accountId } : {},
+    select: {
+      id: true,
+      userId: true,
+      accessToken: true,
+      refreshToken: true,
+      expiresAt: true
+    }
+  });
+
+  if (!connection) {
+    console.log("[Zoom Webhook] No Zoom connection found for account:", accountId);
+    return;
+  }
+
+  // Refresh token if needed
+  const refreshed = await refreshConnectionIfNeeded(connection);
+
+  for (const file of transcriptFiles) {
+    const fileId = String(file.id ?? "").trim();
+    const downloadUrl = String(file.download_url ?? "").trim();
+    
+    if (!fileId || !downloadUrl) continue;
+
+    const sourceReferenceId = `zoom:${meetingUuid}:${fileId}`;
+
+    // Check for duplicate
+    const existing = await prisma.painEvent.findUnique({
+      where: {
+        source_sourceReferenceId: {
+          source: "zoom",
+          sourceReferenceId
+        }
+      }
+    });
+
+    if (existing) {
+      console.log("[Zoom Webhook] Duplicate transcript, skipping");
+      continue;
+    }
+
+    try {
+      // Fetch transcript
+      const transcriptResponse = await fetch(downloadUrl, {
+        headers: { Authorization: `Bearer ${refreshed.accessToken}` }
+      });
+
+      if (!transcriptResponse.ok) {
+        // Try with access_token in URL
+        const separator = downloadUrl.includes("?") ? "&" : "?";
+        const fallbackUrl = `${downloadUrl}${separator}access_token=${encodeURIComponent(refreshed.accessToken)}`;
+        const fallbackResponse = await fetch(fallbackUrl);
+        
+        if (!fallbackResponse.ok) {
+          console.error("[Zoom Webhook] Failed to fetch transcript");
+          continue;
+        }
+        
+        var rawVtt = await fallbackResponse.text();
+      } else {
+        var rawVtt = await transcriptResponse.text();
+      }
+
+      // Parse with speaker diarization
+      const utterances = parseVttWithSpeakers(rawVtt);
+      const formattedTranscript = formatTranscriptForAI(utterances);
+
+      // Identify multiple feedback segments for multi-topic extraction
+      const feedbackSegments = identifyFeedbackSegments(formattedTranscript);
+      
+      if (feedbackSegments.length === 0) {
+        // No clear feedback identified, process entire transcript
+        feedbackSegments.push(formattedTranscript);
+      }
+
+      const topic = String(recording.topic ?? "").trim() || "Zoom call";
+      const hostEmail = recording.host_email ?? null;
+      const startedAt = recording.start_time ?? null;
+
+      // Create pain events for each identified segment
+      for (let i = 0; i < feedbackSegments.length; i++) {
+        const segment = feedbackSegments[i];
+        const segmentId = feedbackSegments.length > 1 
+          ? `${sourceReferenceId}:segment-${i + 1}` 
+          : sourceReferenceId;
+
+        // Check for duplicate segment
+        const existingSegment = await prisma.painEvent.findUnique({
+          where: {
+            source_sourceReferenceId: {
+              source: "zoom",
+              sourceReferenceId: segmentId
+            }
+          }
+        });
+
+        if (existingSegment) continue;
+
+        const cleanedTranscript = scrubPii(segment);
+        const context = [
+          `Zoom call topic: ${topic}`,
+          startedAt ? `Call date: ${startedAt}` : "",
+          hostEmail ? `Host: ${hostEmail}` : "",
+          feedbackSegments.length > 1 ? `Segment ${i + 1} of ${feedbackSegments.length}` : ""
+        ].filter(Boolean).join(" • ");
+
+        const rawText = [
+          cleanedTranscript,
+          context ? `Context: ${context}` : ""
+        ].filter(Boolean).join("\n\n");
+
+        if (rawText.length < 50) continue;
+
+        const painEvent = await prisma.painEvent.create({
+          data: {
+            userId: connection.userId,
+            source: "zoom",
+            sourceReferenceId: segmentId,
+            rawText: rawText.slice(0, 20000),
+            status: "pending_ai"
+          }
+        });
+
+        console.log(`[Zoom Webhook] Created pain event ${painEvent.id} for segment ${i + 1}`);
+
+        // Process immediately
+        try {
+          await processPainEvent(painEvent.id);
+        } catch (err) {
+          console.error("[Zoom Webhook] Failed to process pain event:", err);
+        }
+      }
+
+      // Update last synced
+      await prisma.zoomConnection.update({
+        where: { id: refreshed.id },
+        data: { lastSyncedAt: new Date() }
+      });
+
+    } catch (err) {
+      console.error("[Zoom Webhook] Error processing transcript file:", err);
+    }
+  }
+}
+
+/**
+ * Get webhook URL for Zoom setup
+ */
+zoomIntegrationRoutes.get("/webhook-url", requireCompanyWriteAccess, (_req, res) => {
+  res.status(200).json({
+    url: `${env.APP_URL}/api/integrations/zoom/webhook`,
+    events: ["recording.completed", "recording.transcript_completed"],
+    instructions: "Add this URL in your Zoom App's Event Subscriptions settings."
+  });
 });

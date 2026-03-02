@@ -44,6 +44,7 @@ const envSchema = z.object({
   ZOOM_CLIENT_ID: z.string().default("mock-zoom-client-id"),
   ZOOM_CLIENT_SECRET: z.string().default("mock-zoom-client-secret"),
   ZOOM_REDIRECT_URI: z.string().default("http://localhost:3000/api/integrations/zoom/callback"),
+  ZOOM_WEBHOOK_SECRET_TOKEN: z.string().default(""),
   USE_MOCK_ZOOM: z
     .string()
     .optional()

@@ -1843,6 +1843,7 @@
         : "";
 
       var zoomStatusHtml = "";
+      var zoomWebhookUrl = window.location.origin + "/api/integrations/zoom/webhook";
       if (state.errors.zoom) {
         zoomStatusHtml = '<div class="integration-status has-error">' + esc(state.errors.zoom) + '</div>';
       } else if (zoomConnected) {
@@ -1850,6 +1851,15 @@
           '<strong>Account:</strong> ' + esc(zoomEmail) +
           ' • <strong>Last sync:</strong> ' + esc(zoomLastSync) +
           (zoomExpires ? ' • <strong>Token expires:</strong> ' + esc(zoomExpires) : '') +
+          '</div>' +
+          '<div class="integration-setup-hint">' +
+          '<strong>🔔 Automatic Transcripts</strong>: For auto-import after every call, add an event subscription in your ' +
+          '<a href="https://marketplace.zoom.us/" target="_blank">Zoom App</a>:' +
+          '<code class="webhook-url" onclick="navigator.clipboard.writeText(\'' + esc(zoomWebhookUrl) + '\'); this.classList.add(\'copied\');">' +
+          esc(zoomWebhookUrl) +
+          '<span class="copy-hint">(click to copy)</span>' +
+          '</code>' +
+          '<span class="muted">Subscribe to: recording.completed, recording.transcript_completed</span>' +
           '</div>';
       } else {
         zoomStatusHtml = '<div class="integration-status">Connect your Zoom account to start importing call transcripts.</div>';

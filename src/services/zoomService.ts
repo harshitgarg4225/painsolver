@@ -307,6 +307,197 @@ export async function fetchZoomProfile(accessToken: string): Promise<ZoomProfile
   return fetchZoomApiJson<ZoomProfile>("/users/me", accessToken);
 }
 
+/**
+ * Extract individual topics/feature requests from a transcript
+ * For multi-topic extraction from a single call
+ */
+export interface ExtractedTopic {
+  topic: string;
+  context: string;
+  speaker?: string;
+  timestamp?: string;
+}
+
+/**
+ * Parse VTT transcript with speaker diarization
+ */
+export function parseVttWithSpeakers(vttText: string): Array<{
+  speaker: string;
+  text: string;
+  timestamp: string;
+}> {
+  const lines = vttText.replace(/\r/g, "").split("\n");
+  const utterances: Array<{ speaker: string; text: string; timestamp: string }> = [];
+  
+  let currentTimestamp = "";
+  let currentSpeaker = "";
+  let currentText = "";
+  
+  for (const line of lines) {
+    // Skip WEBVTT header and numbers
+    if (line.toUpperCase() === "WEBVTT" || /^\d+$/.test(line.trim()) || !line.trim()) {
+      continue;
+    }
+    
+    // Parse timestamp line
+    const timestampMatch = line.match(/^(\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?)\s+-->\s+\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?/);
+    if (timestampMatch) {
+      if (currentText) {
+        utterances.push({
+          speaker: currentSpeaker || "Speaker",
+          text: currentText.trim(),
+          timestamp: currentTimestamp
+        });
+      }
+      currentTimestamp = timestampMatch[1];
+      currentText = "";
+      continue;
+    }
+    
+    // Parse speaker tag (e.g., <v John Smith>)
+    const speakerMatch = line.match(/^<v\s+([^>]+)>/);
+    if (speakerMatch) {
+      currentSpeaker = speakerMatch[1];
+      currentText = line.replace(/<v[^>]*>/, "").replace(/<\/v>$/, "").trim();
+    } else {
+      currentText += " " + line.replace(/<[^>]*>/g, "").trim();
+    }
+  }
+  
+  // Don't forget the last utterance
+  if (currentText) {
+    utterances.push({
+      speaker: currentSpeaker || "Speaker",
+      text: currentText.trim(),
+      timestamp: currentTimestamp
+    });
+  }
+  
+  return utterances;
+}
+
+/**
+ * Format transcript with speaker context for AI processing
+ */
+export function formatTranscriptForAI(utterances: Array<{
+  speaker: string;
+  text: string;
+  timestamp: string;
+}>): string {
+  return utterances
+    .map((u) => `[${u.timestamp}] ${u.speaker}: ${u.text}`)
+    .join("\n");
+}
+
+/**
+ * Simple heuristic to identify potential feedback segments
+ */
+export function identifyFeedbackSegments(transcript: string): string[] {
+  const segments: string[] = [];
+  const lines = transcript.split("\n");
+  
+  // Keywords that suggest feedback
+  const feedbackIndicators = [
+    /\b(would be nice|should have|could we|can we get|feature|request|wish|want|need|improve|better|missing|doesn't work|broken|bug|error|issue)\b/i,
+    /\b(when will|roadmap|planned|considering|thinking about)\b/i,
+    /\b(our customers|our users|our team|we need)\b/i
+  ];
+  
+  let currentSegment = "";
+  let inFeedbackSection = false;
+  
+  for (const line of lines) {
+    const hasFeedbackIndicator = feedbackIndicators.some((regex) => regex.test(line));
+    
+    if (hasFeedbackIndicator) {
+      inFeedbackSection = true;
+    }
+    
+    if (inFeedbackSection) {
+      currentSegment += line + "\n";
+      
+      // End segment after 3-5 lines of context
+      if (currentSegment.split("\n").length >= 5) {
+        segments.push(currentSegment.trim());
+        currentSegment = "";
+        inFeedbackSection = false;
+      }
+    }
+  }
+  
+  if (currentSegment) {
+    segments.push(currentSegment.trim());
+  }
+  
+  return segments;
+}
+
+/**
+ * Zoom webhook event types
+ */
+export interface ZoomWebhookPayload {
+  event: string;
+  event_ts: number;
+  payload: {
+    account_id?: string;
+    object?: {
+      id?: string | number;
+      uuid?: string;
+      topic?: string;
+      host_email?: string;
+      start_time?: string;
+      recording_files?: Array<{
+        id?: string;
+        file_type?: string;
+        recording_type?: string;
+        download_url?: string;
+        status?: string;
+        file_extension?: string;
+      }>;
+    };
+  };
+}
+
+/**
+ * Verify Zoom webhook signature
+ */
+export function verifyZoomWebhookSignature(
+  signature: string,
+  timestamp: string,
+  body: string
+): boolean {
+  const secret = env.ZOOM_WEBHOOK_SECRET_TOKEN;
+  if (!secret) {
+    console.warn("[Zoom] No webhook secret configured, skipping verification");
+    return true; // Allow in development
+  }
+
+  const message = `v0:${timestamp}:${body}`;
+  const hash = crypto.createHmac("sha256", secret).update(message).digest("hex");
+  const expected = `v0=${hash}`;
+
+  try {
+    return crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected));
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Handle Zoom URL validation challenge
+ */
+export function handleZoomChallenge(plainToken: string): {
+  plainToken: string;
+  encryptedToken: string;
+} {
+  const secret = env.ZOOM_WEBHOOK_SECRET_TOKEN || "";
+  const hash = crypto.createHmac("sha256", secret).update(plainToken).digest("hex");
+  return {
+    plainToken,
+    encryptedToken: hash
+  };
+}
+
 export async function listZoomTranscriptImports(input: {
   accessToken: string;
   daysBack: number;
