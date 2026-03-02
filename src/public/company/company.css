@@ -626,6 +626,23 @@ main {
   box-shadow: inset 0 0 0 1px var(--aqua-700);
 }
 
+.feedback-card.highlight-flash {
+  animation: highlightFlash 1.5s ease-out;
+}
+
+@keyframes highlightFlash {
+  0% {
+    background: var(--aqua-100);
+    border-color: var(--aqua-500);
+    box-shadow: 0 0 0 4px var(--aqua-100);
+  }
+  100% {
+    background: #fff;
+    border-color: var(--aqua-700);
+    box-shadow: inset 0 0 0 1px var(--aqua-700);
+  }
+}
+
 .feedback-card.empty {
   text-align: center;
   padding: 24px;

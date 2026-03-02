@@ -631,6 +631,21 @@ main {
   background: var(--slate-50);
 }
 
+.feedback-main.highlight-flash {
+  animation: highlightFlash 1.5s ease-out;
+}
+
+@keyframes highlightFlash {
+  0% {
+    background: var(--aqua-100);
+    box-shadow: 0 0 0 4px var(--aqua-100);
+  }
+  100% {
+    background: transparent;
+    box-shadow: none;
+  }
+}
+
 .feedback-main:focus-visible {
   outline: 2px solid var(--aqua-700);
   outline-offset: 2px;

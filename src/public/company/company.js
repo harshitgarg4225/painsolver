@@ -3469,12 +3469,39 @@
       state.boardId = boardId;
       state.selectedPostId = postId;
       state.selectedPostIds = [postId];
-      switchView("feedback");
+      
+      // Reset filters to ensure the post is visible
+      state.filter = "all";
+      state.query = "";
+      if (el.feedbackFilter) {
+        el.feedbackFilter.value = "all";
+      }
+      if (el.feedbackSearch) {
+        el.feedbackSearch.value = "";
+      }
+      
       renderBoards();
+      openTab("feedback");
+      
       void loadFeedback().then(function () {
+        // Re-select the post after loading (in case it wasn't in the list)
+        state.selectedPostId = postId;
+        state.selectedPostIds = [postId];
         renderFeedbackList();
         renderDetail();
         loadVoterInsights(postId);
+        
+        // Scroll to the post in the list
+        setTimeout(function () {
+          var postEl = document.querySelector('[data-post-id="' + postId + '"]');
+          if (postEl) {
+            postEl.scrollIntoView({ behavior: "smooth", block: "center" });
+            postEl.classList.add("highlight-flash");
+            setTimeout(function () {
+              postEl.classList.remove("highlight-flash");
+            }, 1500);
+          }
+        }, 100);
       });
     }
 

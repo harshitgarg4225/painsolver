@@ -1722,17 +1722,26 @@
       }
 
       // Switch to feedback tab and expand this post
-      switchTab("feedback");
+      state.activeTab = "feedback";
       state.expandedPostId = postId;
-      renderFeedback();
+      renderTabs();
       
-      // Scroll to the post if it exists
-      setTimeout(function () {
-        var postEl = document.querySelector('[data-expand-id="' + postId + '"]');
-        if (postEl) {
-          postEl.scrollIntoView({ behavior: "smooth", block: "center" });
-        }
-      }, 100);
+      void loadFeedback().then(function () {
+        state.expandedPostId = postId;
+        renderFeedback();
+        
+        // Scroll to the post if it exists
+        setTimeout(function () {
+          var postEl = document.querySelector('[data-expand-id="' + postId + '"]');
+          if (postEl) {
+            postEl.scrollIntoView({ behavior: "smooth", block: "center" });
+            postEl.classList.add("highlight-flash");
+            setTimeout(function () {
+              postEl.classList.remove("highlight-flash");
+            }, 1500);
+          }
+        }, 100);
+      });
     }
 
     if (el.roadmapPlanned) {
