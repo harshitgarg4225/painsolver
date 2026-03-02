@@ -492,8 +492,16 @@
           </div>
           <div id="ai-inbox-configuration" class="ai-inbox-view">
             <div class="config-intro">
-              <h3>Connect Your Support Sources</h3>
-              <p class="muted">Import customer conversations from Zoom calls and Freshdesk tickets. Our AI automatically extracts pain points and creates actionable feature requests.</p>
+              <h3>🤖 AI-Powered Feedback Capture</h3>
+              <p class="muted">Connect your support tools to automatically capture customer feedback. Our AI extracts pain points, classifies them, and routes them to your idea board.</p>
+              <div class="ai-config-settings">
+                <label class="ai-setting">
+                  <span>Auto-merge threshold</span>
+                  <input type="range" id="ai-threshold-slider" min="50" max="95" value="75" />
+                  <span id="ai-threshold-value">75%</span>
+                </label>
+                <p class="setting-hint">Events above this confidence score are automatically merged. Lower = more automation, higher = more manual review.</p>
+              </div>
             </div>
             <div class="integrations-grid">
               <!-- Zoom Integration Card -->

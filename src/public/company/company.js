@@ -260,7 +260,9 @@
     customerViewSummary: document.getElementById("customer-view-summary"),
     customerViewList: document.getElementById("customer-view-list"),
     exportPostsCsv: document.getElementById("export-posts-csv"),
-    exportCommentsCsv: document.getElementById("export-comments-csv")
+    exportCommentsCsv: document.getElementById("export-comments-csv"),
+    aiThresholdSlider: document.getElementById("ai-threshold-slider"),
+    aiThresholdValue: document.getElementById("ai-threshold-value")
   };
 
   var loadingCounts = {};
@@ -5325,6 +5327,22 @@
     el.exportCommentsCsv.addEventListener("click", function () {
       window.open("/api/company/export/comments.csv", "_blank");
     });
+
+    // AI Threshold Slider
+    if (el.aiThresholdSlider && el.aiThresholdValue) {
+      // Load saved preference
+      var savedThreshold = localStorage.getItem("painsolver_ai_threshold");
+      if (savedThreshold) {
+        el.aiThresholdSlider.value = savedThreshold;
+        el.aiThresholdValue.textContent = savedThreshold + "%";
+      }
+
+      el.aiThresholdSlider.addEventListener("input", function () {
+        var value = el.aiThresholdSlider.value;
+        el.aiThresholdValue.textContent = value + "%";
+        localStorage.setItem("painsolver_ai_threshold", value);
+      });
+    }
   }
 
   function bootstrap() {
