@@ -148,16 +148,18 @@ portalRoutes.get("/boards/:boardId/posts", async (req, res) => {
   const statusParam = req.query.status as string | undefined;
   const limitParam = req.query.limit ? parseInt(req.query.limit as string, 10) : 100;
 
-  // Parse comma-separated status values
-  const statuses = statusParam ? statusParam.split(",").map((s) => s.trim()) : ["planned", "in_progress", "complete"];
+  // Parse comma-separated status values and cast to PostStatus enum
+  const validStatuses = ["under_review", "upcoming", "backlog", "planned", "in_progress", "complete", "shipped"];
+  const requestedStatuses = statusParam
+    ? statusParam.split(",").map((s) => s.trim()).filter((s) => validStatuses.includes(s))
+    : ["planned", "in_progress", "complete"];
 
   const posts = await prisma.post.findMany({
     where: {
       boardId,
-      status: { in: statuses }
+      status: { in: requestedStatuses as ("under_review" | "upcoming" | "backlog" | "planned" | "in_progress" | "complete" | "shipped")[] }
     },
     include: {
-      tags: true,
       _count: {
         select: {
           votes: true,
@@ -172,11 +174,11 @@ portalRoutes.get("/boards/:boardId/posts", async (req, res) => {
   const formattedPosts = posts.map((post) => ({
     id: post.id,
     title: post.title,
-    description: post.body,
+    description: post.description,
     status: post.status,
     voteCount: post._count.votes,
     commentCount: post._count.comments,
-    tags: post.tags.map((t) => ({ id: t.id, name: t.name })),
+    tags: post.tags.map((t) => ({ name: t })),
     createdAt: post.createdAt
   }));
 
@@ -470,16 +472,22 @@ portalRoutes.get("/me", async (req, res) => {
 portalRoutes.get("/users/:userId/submissions", async (req, res) => {
   const { userId } = req.params;
 
-  const posts = await prisma.post.findMany({
+  // A user's "submissions" are posts they created, identified by an explicit vote
+  const votes = await prisma.vote.findMany({
     where: {
-      authorId: userId
+      userId,
+      voteType: "explicit"
     },
     include: {
-      board: { select: { id: true, name: true } },
-      _count: {
-        select: {
-          votes: true,
-          comments: true
+      post: {
+        include: {
+          board: { select: { id: true, name: true } },
+          _count: {
+            select: {
+              votes: true,
+              comments: true
+            }
+          }
         }
       }
     },
@@ -487,17 +495,19 @@ portalRoutes.get("/users/:userId/submissions", async (req, res) => {
     take: 100
   });
 
-  const submissions = posts.map((post) => ({
-    id: post.id,
-    title: post.title,
-    description: post.body,
-    status: post.status,
-    voteCount: post._count.votes,
-    commentCount: post._count.comments,
-    board: post.board,
-    boardName: post.board?.name,
-    createdAt: post.createdAt
-  }));
+  const submissions = votes
+    .filter((v) => v.post)
+    .map((v) => ({
+      id: v.post.id,
+      title: v.post.title,
+      description: v.post.description,
+      status: v.post.status,
+      voteCount: v.post._count.votes,
+      commentCount: v.post._count.comments,
+      board: v.post.board,
+      boardName: v.post.board?.name,
+      createdAt: v.post.createdAt
+    }));
 
   res.status(200).json({ submissions });
 });
@@ -531,7 +541,7 @@ portalRoutes.get("/users/:userId/votes", async (req, res) => {
     .map((vote) => ({
       id: vote.post.id,
       title: vote.post.title,
-      description: vote.post.body,
+      description: vote.post.description,
       status: vote.post.status,
       voteCount: vote.post._count.votes,
       commentCount: vote.post._count.comments,
@@ -565,7 +575,7 @@ portalRoutes.get("/users/:userId/comments", async (req, res) => {
 
   const userComments = comments.map((comment) => ({
     id: comment.id,
-    body: comment.body,
+    body: comment.value,
     postId: comment.postId,
     postTitle: comment.post?.title,
     createdAt: comment.createdAt
