@@ -1118,7 +1118,7 @@ main {
   }
   
   .voter-card-header {
-    flex-wrap: wrap;
+  flex-wrap: wrap;
   }
   
   .voter-mrr-badge {
@@ -1228,8 +1228,17 @@ main {
   transition: all 0.2s ease;
 }
 
+.roadmap-item.clickable {
+  cursor: pointer;
+}
+
 .roadmap-item:hover {
   box-shadow: var(--shadow-1);
+  border-color: var(--aqua-600);
+}
+
+.roadmap-item.clickable:active {
+  transform: scale(0.98);
 }
 
 /* ========================================

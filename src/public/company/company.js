@@ -1459,7 +1459,7 @@
       });
 
       return (
-        '<article class="roadmap-item">' +
+        '<article class="roadmap-item clickable" data-roadmap-post-id="' + esc(post.id) + '" data-roadmap-board-id="' + esc(post.boardId) + '">' +
         '<strong>' + esc(post.title) + '</strong>' +
         '<p class="muted">' +
         esc(post.voteCount) +
@@ -3445,6 +3445,47 @@
         state.roadmapQuery = el.roadmapSearch.value.trim();
         void loadRoadmap();
       });
+    }
+
+    // Roadmap item click handlers
+    function handleRoadmapItemClick(event) {
+      var target = event.target;
+      if (!(target instanceof HTMLElement)) {
+        return;
+      }
+
+      var item = target.closest("[data-roadmap-post-id]");
+      if (!item) {
+        return;
+      }
+
+      var postId = item.getAttribute("data-roadmap-post-id");
+      var boardId = item.getAttribute("data-roadmap-board-id");
+      if (!postId || !boardId) {
+        return;
+      }
+
+      // Navigate to feedback tab and select this post
+      state.boardId = boardId;
+      state.selectedPostId = postId;
+      state.selectedPostIds = [postId];
+      switchView("feedback");
+      renderBoards();
+      void loadFeedback().then(function () {
+        renderFeedbackList();
+        renderDetail();
+        loadVoterInsights(postId);
+      });
+    }
+
+    if (el.roadmapPlanned) {
+      el.roadmapPlanned.addEventListener("click", handleRoadmapItemClick);
+    }
+    if (el.roadmapProgress) {
+      el.roadmapProgress.addEventListener("click", handleRoadmapItemClick);
+    }
+    if (el.roadmapComplete) {
+      el.roadmapComplete.addEventListener("click", handleRoadmapItemClick);
     }
 
     el.feedbackSearch.addEventListener("input", function () {

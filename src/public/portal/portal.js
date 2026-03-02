@@ -852,7 +852,7 @@
   function renderRoadmap(roadmap) {
     function template(post) {
       return (
-        '<article class="roadmap-item">' +
+        '<article class="roadmap-item clickable" data-roadmap-post-id="' + esc(post.id) + '">' +
         "<h4>" +
         esc(post.title) +
         "</h4>" +
@@ -1703,6 +1703,47 @@
       event.preventDefault();
       toggleExpand(target.getAttribute("data-expand-id"));
     });
+
+    // Roadmap item click handlers - open the post in feedback view
+    function handleRoadmapClick(event) {
+      var target = event.target;
+      if (!(target instanceof HTMLElement)) {
+        return;
+      }
+
+      var item = target.closest("[data-roadmap-post-id]");
+      if (!item) {
+        return;
+      }
+
+      var postId = item.getAttribute("data-roadmap-post-id");
+      if (!postId) {
+        return;
+      }
+
+      // Switch to feedback tab and expand this post
+      switchTab("feedback");
+      state.expandedPostId = postId;
+      renderFeedback();
+      
+      // Scroll to the post if it exists
+      setTimeout(function () {
+        var postEl = document.querySelector('[data-expand-id="' + postId + '"]');
+        if (postEl) {
+          postEl.scrollIntoView({ behavior: "smooth", block: "center" });
+        }
+      }, 100);
+    }
+
+    if (el.roadmapPlanned) {
+      el.roadmapPlanned.addEventListener("click", handleRoadmapClick);
+    }
+    if (el.roadmapProgress) {
+      el.roadmapProgress.addEventListener("click", handleRoadmapClick);
+    }
+    if (el.roadmapComplete) {
+      el.roadmapComplete.addEventListener("click", handleRoadmapClick);
+    }
 
     el.createPost.addEventListener("click", function () {
       if (!state.isLoggedIn) {

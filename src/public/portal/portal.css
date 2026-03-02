@@ -818,9 +818,17 @@ main {
   transition: all 0.2s ease;
 }
 
+.roadmap-item.clickable {
+  cursor: pointer;
+}
+
 .roadmap-item:hover {
-  border-color: var(--aqua-200);
+  border-color: var(--aqua-400);
   box-shadow: var(--shadow-1);
+}
+
+.roadmap-item.clickable:active {
+  transform: scale(0.98);
 }
 
 .roadmap-item h4 {
