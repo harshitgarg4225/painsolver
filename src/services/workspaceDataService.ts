@@ -11,6 +11,11 @@ import {
 import { ActorContext } from "../middleware/actorAccess";
 import { prisma } from "../db/prisma";
 import { createOrUpgradeVote } from "./postService";
+import {
+  sendCommentReplyEmail,
+  sendMentionEmail,
+  sendStatusChangeEmail
+} from "./emailService";
 
 export type WorkspaceSortMode = "trending" | "top" | "new";
 export type WorkspaceFilterMode =
@@ -1657,11 +1662,15 @@ async function notifyCommentEvents(
     authorDisplayName: string;
     body: string;
     replyToCommentId: string | null;
+    postTitle: string;
   }
 ): Promise<void> {
   if (input.replyToCommentId) {
     const parent = await tx.comment.findUnique({
-      where: { id: input.replyToCommentId }
+      where: { id: input.replyToCommentId },
+      include: {
+        author: { select: { id: true, email: true, name: true } }
+      }
     });
     if (parent && parent.authorId !== input.authorUserId) {
       const pref = await ensureNotificationPreferences(tx, parent.authorId);
@@ -1674,6 +1683,18 @@ async function notifyCommentEvents(
           title: "New reply on your comment",
           body: input.authorDisplayName + " replied to your comment."
         });
+
+        // Send email notification asynchronously (don't block the transaction)
+        if (parent.author?.email) {
+          sendCommentReplyEmail({
+            userEmail: parent.author.email,
+            userName: parent.author.name ?? parent.author.email,
+            postTitle: input.postTitle,
+            postId: input.postId,
+            commenterName: input.authorDisplayName,
+            commentBody: input.body
+          }).catch((err) => console.error("[Email] Failed to send comment reply email:", err));
+        }
       }
     }
   }
@@ -1707,6 +1728,16 @@ async function notifyCommentEvents(
       title: "You were mentioned",
       body: input.authorDisplayName + " mentioned you in a comment."
     });
+
+    // Send email notification asynchronously
+    sendMentionEmail({
+      userEmail: user.email,
+      userName: user.name ?? user.email,
+      postTitle: input.postTitle,
+      postId: input.postId,
+      mentionerName: input.authorDisplayName,
+      commentBody: input.body
+    }).catch((err) => console.error("[Email] Failed to send mention email:", err));
   }
 }
 
@@ -1767,7 +1798,8 @@ export async function addCommentAsActor(input: {
       authorUserId: actorUser.id,
       authorDisplayName: actorUser.name || actorUser.email,
       body: input.body,
-      replyToCommentId: input.replyToCommentId ?? null
+      replyToCommentId: input.replyToCommentId ?? null,
+      postTitle: post.title
     });
 
     return comment;
@@ -2120,7 +2152,8 @@ export async function updatePostForCompany(input: {
     include: {
       votes: {
         select: {
-          userId: true
+          userId: true,
+          user: { select: { email: true, name: true } }
         }
       }
     }
@@ -2132,6 +2165,7 @@ export async function updatePostForCompany(input: {
 
   const nextStatus = (input.status ?? normalizePostStatus(current.status)) as PostStatus;
   const etaDate = typeof input.eta === "string" && input.eta ? new Date(input.eta) : input.eta === null ? null : undefined;
+  const oldStatus = normalizePostStatus(current.status);
 
   const updatedPost = await prisma.$transaction(async (tx) => {
     const updated = await tx.post.update({
@@ -2165,6 +2199,30 @@ export async function updatePostForCompany(input: {
             body: "Moved to " + normalizePostStatus(updated.status).replace(/_/g, " ") + "."
           });
         }
+
+        // Send status change emails asynchronously (after transaction commits)
+        const usersToEmail = current.votes
+          .filter((vote) => prefs.some((p) => p.userId === vote.userId) && vote.user?.email)
+          .map((vote) => ({
+            userId: vote.userId,
+            email: vote.user!.email,
+            name: vote.user!.name
+          }));
+
+        // Queue emails outside of transaction
+        setTimeout(() => {
+          for (const voter of usersToEmail) {
+            sendStatusChangeEmail({
+              userEmail: voter.email,
+              userName: voter.name ?? voter.email,
+              postTitle: updated.title,
+              postId: updated.id,
+              boardId: updated.boardId,
+              oldStatus: oldStatus,
+              newStatus: normalizePostStatus(updated.status)
+            }).catch((err) => console.error("[Email] Failed to send status change email:", err));
+          }
+        }, 0);
       }
     }
 
