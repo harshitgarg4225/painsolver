@@ -52,6 +52,7 @@ const envSchema = z.object({
   SLACK_CLIENT_SECRET: z.string().default(""),
   SLACK_REDIRECT_URI: z.string().default("http://localhost:3000/api/integrations/slack/callback"),
   SLACK_STATE_SECRET: z.string().optional(),
+  SLACK_SIGNING_SECRET: z.string().default(""),
   RESEND_API_KEY: z.string().default(""),
   EMAIL_FROM_ADDRESS: z.string().default("PainSolver <notifications@painsolver.vercel.app>"),
   EMAIL_REPLY_TO: z.string().default("support@painsolver.vercel.app"),

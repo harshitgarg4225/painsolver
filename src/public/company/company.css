@@ -1894,6 +1894,65 @@ main {
   color: #991b1b;
 }
 
+.integration-setup-hint {
+  margin-top: 12px;
+  padding: 14px;
+  background: linear-gradient(135deg, var(--aqua-50), var(--slate-50));
+  border: 1px solid var(--aqua-200);
+  border-radius: var(--radius-sm);
+  font-size: 0.8rem;
+}
+
+.integration-setup-hint strong {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--aqua-800);
+}
+
+.integration-setup-hint a {
+  color: var(--aqua-700);
+  text-decoration: underline;
+}
+
+.webhook-url {
+  display: block;
+  margin: 10px 0 8px;
+  padding: 10px 14px;
+  background: var(--slate-900);
+  color: var(--aqua-300);
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  position: relative;
+  word-break: break-all;
+  transition: all 0.2s ease;
+}
+
+.webhook-url:hover {
+  background: var(--slate-800);
+}
+
+.webhook-url .copy-hint {
+  display: block;
+  margin-top: 6px;
+  font-size: 0.7rem;
+  color: var(--slate-500);
+  font-family: var(--font-sans);
+}
+
+.webhook-url.copied {
+  background: var(--emerald-800);
+}
+
+.webhook-url.copied .copy-hint {
+  color: var(--emerald-300);
+}
+
+.webhook-url.copied .copy-hint::before {
+  content: "✓ Copied! ";
+}
+
 .integration-actions {
   display: flex;
   flex-wrap: wrap;

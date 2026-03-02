@@ -2025,6 +2025,7 @@
 
       // Status details
       var slackLastSync = slack.lastSyncedAt ? fullDate(slack.lastSyncedAt) : "Never";
+      var eventsWebhookUrl = window.location.origin + "/api/integrations/slack/events";
       var slackStatusHtml = "";
       if (state.errors.slack) {
         slackStatusHtml = '<div class="integration-status has-error">' + esc(state.errors.slack) + '</div>';
@@ -2033,6 +2034,15 @@
           '<strong>Workspace:</strong> ' + esc(slack.teamName || "Connected") +
           ' • <strong>Channels:</strong> ' + (slack.channelCount || 0) + ' selected' +
           ' • <strong>Last sync:</strong> ' + esc(slackLastSync) +
+          '</div>' +
+          '<div class="integration-setup-hint">' +
+          '<strong>🔔 Real-time Events</strong>: For instant feedback capture, set up ' +
+          '<a href="https://api.slack.com/apps" target="_blank">Slack Event Subscriptions</a> with this URL:' +
+          '<code class="webhook-url" onclick="navigator.clipboard.writeText(\'' + esc(eventsWebhookUrl) + '\'); this.classList.add(\'copied\');">' +
+          esc(eventsWebhookUrl) +
+          '<span class="copy-hint">(click to copy)</span>' +
+          '</code>' +
+          '<span class="muted">Subscribe to: message.channels, message.groups, app_mention</span>' +
           '</div>';
       } else {
         slackStatusHtml = '<div class="integration-status">Connect your Slack workspace to monitor channels for feedback.</div>';

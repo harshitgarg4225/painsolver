@@ -116,6 +116,7 @@ export function parseSlackOAuthState(state: string): { userId: string; email: st
 }
 
 export function buildSlackAuthorizeUrl(state: string): string {
+  // Bot scopes for real-time events and interactions
   const scopes = [
     "channels:history",
     "channels:read",
@@ -123,12 +124,20 @@ export function buildSlackAuthorizeUrl(state: string): string {
     "groups:history",
     "groups:read",
     "users:read",
-    "team:read"
+    "team:read",
+    "app_mentions:read" // Respond to @mentions
+  ].join(",");
+
+  // User scopes (for OAuth flow context)
+  const userScopes = [
+    "channels:read",
+    "groups:read"
   ].join(",");
 
   const params = new URLSearchParams({
     client_id: SLACK_CLIENT_ID,
     scope: scopes,
+    user_scope: userScopes,
     redirect_uri: SLACK_REDIRECT_URI,
     state: state
   });
@@ -337,5 +346,206 @@ export function defaultSlackConnection(): SlackConnectionStatusView {
     connectedAt: null,
     lastSyncedAt: null
   };
+}
+
+// =============================================
+// Slack Events API Support
+// =============================================
+
+const SLACK_SIGNING_SECRET = env.SLACK_SIGNING_SECRET || env.SLACK_CLIENT_SECRET || "";
+
+/**
+ * Verify Slack request signature (required for Events API)
+ */
+export function verifySlackSignature(
+  signature: string,
+  timestamp: string,
+  body: string
+): boolean {
+  if (!SLACK_SIGNING_SECRET) {
+    console.warn("[Slack] No signing secret configured, skipping verification");
+    return true; // Allow in development
+  }
+
+  // Check timestamp to prevent replay attacks (5 minutes)
+  const now = Math.floor(Date.now() / 1000);
+  if (Math.abs(now - parseInt(timestamp, 10)) > 60 * 5) {
+    console.warn("[Slack] Request timestamp too old");
+    return false;
+  }
+
+  const sigBaseString = `v0:${timestamp}:${body}`;
+  const mySignature = "v0=" + crypto
+    .createHmac("sha256", SLACK_SIGNING_SECRET)
+    .update(sigBaseString)
+    .digest("hex");
+
+  try {
+    return crypto.timingSafeEqual(Buffer.from(mySignature), Buffer.from(signature));
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Fetch thread replies for context
+ */
+export async function fetchSlackThreadReplies(
+  accessToken: string,
+  channelId: string,
+  threadTs: string,
+  options: { limit?: number } = {}
+): Promise<SlackMessage[]> {
+  const params = new URLSearchParams({
+    channel: channelId,
+    ts: threadTs,
+    limit: String(options.limit || 50)
+  });
+
+  const response = await fetch(`https://slack.com/api/conversations.replies?${params.toString()}`, {
+    headers: {
+      Authorization: `Bearer ${accessToken}`
+    }
+  });
+
+  const data = await response.json();
+
+  if (!data.ok) {
+    console.error("Failed to fetch thread replies:", data.error);
+    return [];
+  }
+
+  const messages: SlackMessage[] = [];
+
+  for (const msg of data.messages || []) {
+    if (msg.type !== "message") continue;
+
+    messages.push({
+      messageId: msg.ts,
+      channelId: channelId,
+      channelName: "",
+      userId: msg.user || "",
+      userName: "",
+      text: msg.text || "",
+      timestamp: msg.ts,
+      threadTs: msg.thread_ts,
+      permalink: undefined
+    });
+  }
+
+  return messages;
+}
+
+/**
+ * Get channel info (name, etc.)
+ */
+export async function fetchSlackChannelInfo(
+  accessToken: string,
+  channelId: string
+): Promise<{ id: string; name: string } | null> {
+  const response = await fetch(`https://slack.com/api/conversations.info?channel=${channelId}`, {
+    headers: {
+      Authorization: `Bearer ${accessToken}`
+    }
+  });
+
+  const data = await response.json();
+
+  if (!data.ok) {
+    return null;
+  }
+
+  return {
+    id: data.channel?.id || channelId,
+    name: data.channel?.name || ""
+  };
+}
+
+/**
+ * Parsed Slack event from Events API
+ */
+export interface SlackEventPayload {
+  type: string;
+  challenge?: string; // URL verification
+  token?: string;
+  team_id?: string;
+  event?: {
+    type: string;
+    user?: string;
+    channel?: string;
+    text?: string;
+    ts?: string;
+    thread_ts?: string;
+    channel_type?: string;
+    bot_id?: string; // Ignore bot messages
+    subtype?: string;
+  };
+  event_id?: string;
+  event_time?: number;
+}
+
+/**
+ * Build combined text from thread for context
+ */
+export async function buildThreadContext(
+  accessToken: string,
+  channelId: string,
+  threadTs: string,
+  channelName: string
+): Promise<string> {
+  const replies = await fetchSlackThreadReplies(accessToken, channelId, threadTs, { limit: 20 });
+  
+  if (replies.length === 0) {
+    return "";
+  }
+
+  // Get user info for each unique user
+  const userIds = Array.from(new Set(replies.map((r) => r.userId).filter(Boolean)));
+  const userNames: Record<string, string> = {};
+  
+  for (const uid of userIds.slice(0, 10)) {
+    const userInfo = await fetchSlackUserInfo(accessToken, uid);
+    if (userInfo) {
+      userNames[uid] = userInfo.name || uid;
+    }
+  }
+
+  const threadText = replies
+    .map((r) => {
+      const name = userNames[r.userId] || "User";
+      return `${name}: ${r.text}`;
+    })
+    .join("\n");
+
+  return `[Thread from #${channelName}]\n${threadText}`;
+}
+
+/**
+ * Classify message type using simple heuristics
+ */
+export function classifySlackMessage(text: string): "feedback" | "bug" | "question" | "noise" {
+  const lowerText = text.toLowerCase();
+  
+  // Bug indicators
+  if (/\b(bug|error|broken|crash|not working|doesn't work|failed|issue)\b/.test(lowerText)) {
+    return "bug";
+  }
+  
+  // Feature request / feedback indicators
+  if (/\b(would be nice|should|could we|can we|feature|request|wish|want|need|improve|better)\b/.test(lowerText)) {
+    return "feedback";
+  }
+  
+  // Question indicators
+  if (/\b(how do|how to|what is|where is|can you|could you explain|\?)\b/.test(lowerText)) {
+    return "question";
+  }
+  
+  // Too short or likely noise
+  if (text.length < 30 || /^(ok|thanks|thank you|lol|haha|👍|yes|no|sure)$/i.test(text.trim())) {
+    return "noise";
+  }
+  
+  return "feedback"; // Default to feedback for analysis
 }
 

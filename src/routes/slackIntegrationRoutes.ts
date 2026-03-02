@@ -1,4 +1,4 @@
-import { Router } from "express";
+import { Router, Request, Response, NextFunction } from "express";
 import { z } from "zod";
 
 import { prisma } from "../db/prisma";
@@ -8,15 +8,22 @@ import { getOrCreateActorUser } from "../services/workspaceDataService";
 import { processPainEvent } from "../services/painEventService";
 import {
   buildSlackAuthorizeUrl,
+  buildThreadContext,
+  classifySlackMessage,
   createSlackOAuthState,
   defaultSlackConnection,
   exchangeSlackAuthorizationCode,
+  fetchSlackChannelInfo,
   fetchSlackChannelMessages,
   fetchSlackUserInfo,
   listSlackChannels,
   parseSlackOAuthState,
-  SlackConnectionStatusView
+  postSlackMessage,
+  SlackConnectionStatusView,
+  SlackEventPayload,
+  verifySlackSignature
 } from "../services/slackService";
+import { sendStatusChangeEmail } from "../services/emailService";
 
 const configureChannelsSchema = z.object({
   channelIds: z.array(z.string()).optional(),
@@ -380,4 +387,282 @@ slackIntegrationRoutes.post("/disconnect", requireCompanyWriteAccess, async (req
 
   res.status(200).json({ ok: true });
 });
+
+// =============================================
+// Slack Events API Webhook (Real-time messages)
+// =============================================
+
+// Raw body parser middleware for signature verification
+let rawBodyBuffer: Buffer | null = null;
+
+function captureRawBody(req: Request, _res: Response, next: NextFunction): void {
+  let data = "";
+  req.setEncoding("utf8");
+  req.on("data", (chunk: string) => {
+    data += chunk;
+  });
+  req.on("end", () => {
+    rawBodyBuffer = Buffer.from(data);
+    try {
+      req.body = JSON.parse(data);
+    } catch {
+      req.body = {};
+    }
+    next();
+  });
+}
+
+slackIntegrationRoutes.post("/events", captureRawBody, async (req, res) => {
+  // Verify Slack signature
+  const slackSignature = req.headers["x-slack-signature"] as string || "";
+  const slackTimestamp = req.headers["x-slack-request-timestamp"] as string || "";
+  const rawBody = rawBodyBuffer?.toString() || JSON.stringify(req.body);
+
+  if (!verifySlackSignature(slackSignature, slackTimestamp, rawBody)) {
+    console.warn("[Slack Events] Invalid signature");
+    res.status(401).json({ error: "Invalid signature" });
+    return;
+  }
+
+  const payload = req.body as SlackEventPayload;
+
+  // Handle URL verification challenge
+  if (payload.type === "url_verification" && payload.challenge) {
+    console.log("[Slack Events] URL verification challenge received");
+    res.status(200).json({ challenge: payload.challenge });
+    return;
+  }
+
+  // Handle event callbacks
+  if (payload.type === "event_callback" && payload.event) {
+    const event = payload.event;
+    const teamId = payload.team_id;
+
+    // Ignore bot messages and message edits
+    if (event.bot_id || event.subtype) {
+      res.status(200).json({ ok: true });
+      return;
+    }
+
+    // Only handle message events
+    if (event.type !== "message" || !event.text || !event.channel) {
+      res.status(200).json({ ok: true });
+      return;
+    }
+
+    // Respond immediately to avoid timeout (Slack requires response within 3s)
+    res.status(200).json({ ok: true });
+
+    // Process message asynchronously
+    processSlackEventMessage({
+      teamId: teamId || "",
+      channelId: event.channel,
+      userId: event.user || "",
+      text: event.text,
+      messageTs: event.ts || "",
+      threadTs: event.thread_ts
+    }).catch((err) => {
+      console.error("[Slack Events] Error processing message:", err);
+    });
+
+    return;
+  }
+
+  res.status(200).json({ ok: true });
+});
+
+interface SlackEventMessage {
+  teamId: string;
+  channelId: string;
+  userId: string;
+  text: string;
+  messageTs: string;
+  threadTs?: string;
+}
+
+async function processSlackEventMessage(msg: SlackEventMessage): Promise<void> {
+  // Find the Slack connection for this team
+  const connection = await prisma.slackConnection.findFirst({
+    where: {
+      slackTeamId: msg.teamId,
+      channelIds: { has: msg.channelId }
+    },
+    include: {
+      user: true
+    }
+  });
+
+  if (!connection) {
+    console.log("[Slack Events] No connection configured for this channel/team");
+    return;
+  }
+
+  // Classify the message
+  const classification = classifySlackMessage(msg.text);
+  if (classification === "noise") {
+    console.log("[Slack Events] Skipping noise message");
+    return;
+  }
+
+  // Get channel info
+  const channelInfo = await fetchSlackChannelInfo(connection.accessToken, msg.channelId);
+  const channelName = channelInfo?.name || msg.channelId;
+
+  // Build context from thread if it's a thread reply
+  let fullText = msg.text;
+  let context = `Slack channel: #${channelName}`;
+
+  if (msg.threadTs && msg.threadTs !== msg.messageTs) {
+    const threadContext = await buildThreadContext(
+      connection.accessToken,
+      msg.channelId,
+      msg.threadTs,
+      channelName
+    );
+    if (threadContext) {
+      fullText = `${threadContext}\n\n[Latest message]\n${msg.text}`;
+    }
+    context += " (thread reply)";
+  }
+
+  // Get user info
+  const userInfo = await fetchSlackUserInfo(connection.accessToken, msg.userId);
+  if (userInfo?.name) {
+    context += ` • From: ${userInfo.name}`;
+  }
+
+  // Check for duplicate
+  const sourceReferenceId = `slack-${msg.channelId}-${msg.messageTs}`;
+  const existing = await prisma.painEvent.findUnique({
+    where: {
+      source_sourceReferenceId: {
+        source: "slack",
+        sourceReferenceId
+      }
+    }
+  });
+
+  if (existing) {
+    console.log("[Slack Events] Duplicate message, skipping");
+    return;
+  }
+
+  // Scrub PII and create pain event
+  const cleanedText = scrubPii(fullText);
+  const rawText = [
+    cleanedText,
+    `Context: ${context}`,
+    `Classification: ${classification}`
+  ].join("\n\n");
+
+  const painEvent = await prisma.painEvent.create({
+    data: {
+      userId: connection.userId,
+      source: "slack",
+      sourceReferenceId,
+      rawText: rawText.slice(0, 20000),
+      status: "pending_ai"
+    }
+  });
+
+  console.log(`[Slack Events] Created pain event ${painEvent.id} from #${channelName}`);
+
+  // Process with AI
+  try {
+    const result = await processPainEvent(painEvent.id);
+    
+    // Send acknowledgment back to Slack if we matched/created an idea
+    if (result && connection.accessToken) {
+      const threadTs = msg.threadTs || msg.messageTs;
+      
+      if (result.status === "auto_merged" && result.matchedPostId) {
+        // Get the matched post title
+        const matchedPost = await prisma.post.findUnique({
+          where: { id: result.matchedPostId },
+          select: { title: true }
+        });
+        
+        if (matchedPost) {
+          await postSlackMessage(
+            connection.accessToken,
+            msg.channelId,
+            `📊 This looks like feedback for: *${matchedPost.title}* — vote recorded!`,
+            { threadTs }
+          );
+        }
+      } else if (result.status === "needs_triage") {
+        await postSlackMessage(
+          connection.accessToken,
+          msg.channelId,
+          `💡 Feedback captured! It will be reviewed in the AI Inbox.`,
+          { threadTs }
+        );
+      }
+    }
+  } catch (err) {
+    console.error("[Slack Events] Failed to process pain event:", err);
+  }
+}
+
+// =============================================
+// Slack Notifications (Post status changes back)
+// =============================================
+
+/**
+ * Notify Slack channel when an idea status changes
+ * Called from post update flows
+ */
+export async function notifySlackStatusChange(input: {
+  postId: string;
+  postTitle: string;
+  oldStatus: string;
+  newStatus: string;
+  boardId: string;
+}): Promise<void> {
+  // Find any Slack connections that have been used for this type of feedback
+  const painEvents = await prisma.painEvent.findMany({
+    where: {
+      source: "slack",
+      matchedPostId: input.postId
+    },
+    select: {
+      sourceReferenceId: true,
+      userId: true
+    },
+    take: 5
+  });
+
+  if (painEvents.length === 0) return;
+
+  // Get unique user connections
+  const userIds = Array.from(new Set(painEvents.map((e) => e.userId)));
+  
+  for (const userId of userIds) {
+    const connection = await prisma.slackConnection.findUnique({
+      where: { userId },
+      select: {
+        accessToken: true,
+        channelIds: true
+      }
+    });
+
+    if (!connection || connection.channelIds.length === 0) continue;
+
+    // Post to the first configured channel
+    const statusEmoji = {
+      planned: "📋",
+      in_progress: "🚧",
+      complete: "✅",
+      shipped: "🚀"
+    }[input.newStatus] || "📝";
+
+    const message = `${statusEmoji} *Status Update*: "${input.postTitle}" moved to *${input.newStatus.replace("_", " ")}*`;
+
+    try {
+      await postSlackMessage(connection.accessToken, connection.channelIds[0], message);
+    } catch (err) {
+      console.error("[Slack] Failed to post status notification:", err);
+    }
+  }
+}
 

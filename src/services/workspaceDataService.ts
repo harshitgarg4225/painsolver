@@ -16,6 +16,7 @@ import {
   sendMentionEmail,
   sendStatusChangeEmail
 } from "./emailService";
+import { notifySlackStatusChange } from "../routes/slackIntegrationRoutes";
 
 export type WorkspaceSortMode = "trending" | "top" | "new";
 export type WorkspaceFilterMode =
@@ -2209,7 +2210,7 @@ export async function updatePostForCompany(input: {
             name: vote.user!.name
           }));
 
-        // Queue emails outside of transaction
+        // Queue emails and Slack notifications outside of transaction
         setTimeout(() => {
           for (const voter of usersToEmail) {
             sendStatusChangeEmail({
@@ -2222,6 +2223,15 @@ export async function updatePostForCompany(input: {
               newStatus: normalizePostStatus(updated.status)
             }).catch((err) => console.error("[Email] Failed to send status change email:", err));
           }
+          
+          // Notify Slack channels if this post came from Slack
+          notifySlackStatusChange({
+            postId: updated.id,
+            postTitle: updated.title,
+            oldStatus: oldStatus,
+            newStatus: normalizePostStatus(updated.status),
+            boardId: updated.boardId
+          }).catch((err) => console.error("[Slack] Failed to send status notification:", err));
         }, 0);
       }
     }
