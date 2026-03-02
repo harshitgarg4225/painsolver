@@ -396,3 +396,231 @@ export async function listFreshdeskTickets(input: {
 
   return tickets;
 }
+
+// =============================================
+// Freshdesk Conversation & Bi-directional Sync
+// =============================================
+
+interface FreshdeskConversation {
+  id: number;
+  body: string;
+  body_text: string;
+  incoming: boolean;
+  user_id: number;
+  created_at: string;
+}
+
+/**
+ * Fetch full conversation thread for a ticket
+ */
+export async function fetchFreshdeskTicketConversation(input: {
+  domain: string;
+  apiKey: string;
+  ticketId: string;
+}): Promise<string[]> {
+  if (env.USE_MOCK_FRESHDESK) {
+    return [
+      "Customer: I'm having trouble with the reporting feature.",
+      "Agent: Can you describe the issue in more detail?",
+      "Customer: The weekly report doesn't include the new metrics we added last month."
+    ];
+  }
+
+  try {
+    const conversations = await fetchFreshdeskJson<FreshdeskConversation[]>({
+      domain: input.domain,
+      apiKey: input.apiKey,
+      path: `/api/v2/tickets/${input.ticketId}/conversations`
+    });
+
+    return conversations.map((conv) => {
+      const text = stripHtml(conv.body_text || conv.body || "").trim();
+      const prefix = conv.incoming ? "Customer" : "Agent";
+      return `${prefix}: ${text}`;
+    });
+  } catch (error) {
+    console.error("Failed to fetch Freshdesk conversation:", error);
+    return [];
+  }
+}
+
+/**
+ * Get single ticket details
+ */
+export async function fetchFreshdeskTicket(input: {
+  domain: string;
+  apiKey: string;
+  ticketId: string;
+}): Promise<FreshdeskTicketImportItem | null> {
+  if (env.USE_MOCK_FRESHDESK) {
+    return {
+      sourceReferenceId: input.ticketId,
+      requesterEmail: "mock@example.com",
+      requesterName: "Mock User",
+      description: "Mock ticket description",
+      rawTicket: { id: input.ticketId }
+    };
+  }
+
+  try {
+    const ticket = await fetchFreshdeskJson<FreshdeskTicketApi>({
+      domain: input.domain,
+      apiKey: input.apiKey,
+      path: `/api/v2/tickets/${input.ticketId}`
+    });
+
+    return parseTicketToImportItem(ticket);
+  } catch (error) {
+    console.error("Failed to fetch Freshdesk ticket:", error);
+    return null;
+  }
+}
+
+/**
+ * Add a note to a Freshdesk ticket (bi-directional sync)
+ */
+export async function addFreshdeskTicketNote(input: {
+  domain: string;
+  apiKey: string;
+  ticketId: string;
+  body: string;
+  isPrivate?: boolean;
+}): Promise<boolean> {
+  if (env.USE_MOCK_FRESHDESK) {
+    console.log(`[Freshdesk Mock] Would add note to ticket ${input.ticketId}: ${input.body}`);
+    return true;
+  }
+
+  try {
+    const url = `${normalizeFreshdeskDomain(input.domain)}/api/v2/tickets/${input.ticketId}/notes`;
+    
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        Authorization: authHeader(input.apiKey),
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        body: input.body,
+        private: input.isPrivate !== false // Default to private note
+      })
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`Freshdesk note API failed (${response.status}): ${errorText}`);
+      return false;
+    }
+
+    return true;
+  } catch (error) {
+    console.error("Failed to add Freshdesk note:", error);
+    return false;
+  }
+}
+
+/**
+ * Update Freshdesk ticket status (for bi-directional sync)
+ * Freshdesk status values: 2=Open, 3=Pending, 4=Resolved, 5=Closed
+ */
+export async function updateFreshdeskTicketStatus(input: {
+  domain: string;
+  apiKey: string;
+  ticketId: string;
+  status: number;
+}): Promise<boolean> {
+  if (env.USE_MOCK_FRESHDESK) {
+    console.log(`[Freshdesk Mock] Would update ticket ${input.ticketId} status to ${input.status}`);
+    return true;
+  }
+
+  try {
+    const url = `${normalizeFreshdeskDomain(input.domain)}/api/v2/tickets/${input.ticketId}`;
+    
+    const response = await fetch(url, {
+      method: "PUT",
+      headers: {
+        Authorization: authHeader(input.apiKey),
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        status: input.status
+      })
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`Freshdesk status update failed (${response.status}): ${errorText}`);
+      return false;
+    }
+
+    return true;
+  } catch (error) {
+    console.error("Failed to update Freshdesk ticket status:", error);
+    return false;
+  }
+}
+
+/**
+ * Webhook payload from Freshdesk
+ */
+export interface FreshdeskWebhookPayload {
+  ticket_id?: number | string;
+  ticket_subject?: string;
+  ticket_description?: string;
+  ticket_description_text?: string;
+  requester_email?: string;
+  requester_name?: string;
+  ticket_status?: string | number;
+  ticket_priority?: string | number;
+  ticket_type?: string;
+  ticket_source?: string | number;
+  triggered_event?: string;
+  // Custom fields come as ticket_cf_*
+  [key: string]: unknown;
+}
+
+/**
+ * Parse webhook payload to import item
+ */
+export function parseWebhookPayload(payload: FreshdeskWebhookPayload): FreshdeskTicketImportItem | null {
+  const ticketId = payload.ticket_id;
+  if (!ticketId) {
+    return null;
+  }
+
+  const description = stripHtml(
+    String(payload.ticket_description_text || payload.ticket_description || payload.ticket_subject || "")
+  ).trim();
+
+  if (!description || description.length < 10) {
+    return null;
+  }
+
+  const requesterEmail = String(payload.requester_email || `freshdesk+${ticketId}@unknown.local`)
+    .trim()
+    .toLowerCase();
+
+  return {
+    sourceReferenceId: String(ticketId),
+    requesterEmail,
+    requesterName: payload.requester_name ? String(payload.requester_name).trim() : undefined,
+    description,
+    rawTicket: payload as Record<string, unknown>
+  };
+}
+
+/**
+ * Map PainSolver status to Freshdesk status
+ */
+export function mapPainSolverStatusToFreshdesk(status: string): number | null {
+  const mapping: Record<string, number> = {
+    under_review: 2, // Open
+    backlog: 2,      // Open
+    planned: 3,      // Pending
+    in_progress: 3,  // Pending
+    complete: 4,     // Resolved
+    shipped: 5       // Closed
+  };
+  return mapping[status] ?? null;
+}

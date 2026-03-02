@@ -6,13 +6,21 @@ import { env } from "../config/env";
 import { prisma } from "../db/prisma";
 import { requireCompanyWriteAccess } from "../middleware/actorAccess";
 import { ingestFreshdeskSignal } from "../services/freshdeskIngestionService";
+import { processPainEvent } from "../services/painEventService";
 import {
+  addFreshdeskTicketNote,
+  fetchFreshdeskTicketConversation,
+  FreshdeskWebhookPayload,
   listFreshdeskTicketFields,
   listFreshdeskTickets,
+  mapPainSolverStatusToFreshdesk,
   matchesFreshdeskFieldFilter,
   normalizeFreshdeskDomain,
-  statusFromFreshdeskConfig
+  parseWebhookPayload,
+  statusFromFreshdeskConfig,
+  updateFreshdeskTicketStatus
 } from "../services/freshdeskService";
+import { scrubPii } from "../lib/pii";
 
 const configureFreshdeskSchema = z.object({
   domain: z.string().trim().optional(),
@@ -345,3 +353,183 @@ freshdeskIntegrationRoutes.post("/disconnect", async (_req, res) => {
     params: []
   });
 });
+
+// =============================================
+// Freshdesk Webhook (Real-time ticket events)
+// =============================================
+
+/**
+ * Webhook endpoint for Freshdesk automation rules
+ * Configure in Freshdesk: Admin -> Automations -> Ticket Updates -> Webhook
+ * URL: https://painsolver.vercel.app/api/integrations/freshdesk/webhook
+ */
+freshdeskIntegrationRoutes.post("/webhook", async (req, res) => {
+  // Respond immediately (Freshdesk expects quick response)
+  res.status(200).json({ ok: true });
+
+  const payload = req.body as FreshdeskWebhookPayload;
+  
+  console.log("[Freshdesk Webhook] Received event:", {
+    ticketId: payload.ticket_id,
+    event: payload.triggered_event,
+    subject: payload.ticket_subject
+  });
+
+  // Parse the webhook payload
+  const ticketData = parseWebhookPayload(payload);
+  if (!ticketData) {
+    console.log("[Freshdesk Webhook] Skipping - invalid or empty ticket data");
+    return;
+  }
+
+  // Get Freshdesk config to check filters
+  const config = await ensureFreshdeskConfig();
+  
+  if (!config.enabled) {
+    console.log("[Freshdesk Webhook] Skipping - Freshdesk source is disabled");
+    return;
+  }
+
+  // Check if ticket matches filters
+  const matches = matchesFreshdeskFieldFilter({
+    payload: ticketData.rawTicket,
+    filterField: config.freshdeskFilterField,
+    filterValue: config.freshdeskFilterValue
+  });
+
+  if (!matches) {
+    console.log("[Freshdesk Webhook] Skipping - ticket doesn't match filters");
+    return;
+  }
+
+  try {
+    // Check for duplicate
+    const sourceReferenceId = `freshdesk-${ticketData.sourceReferenceId}`;
+    const existing = await prisma.painEvent.findUnique({
+      where: {
+        source_sourceReferenceId: {
+          source: "freshdesk",
+          sourceReferenceId
+        }
+      }
+    });
+
+    if (existing) {
+      console.log("[Freshdesk Webhook] Duplicate ticket, skipping");
+      return;
+    }
+
+    // Fetch full conversation if we have API credentials
+    let fullContext = ticketData.description;
+    if (config.freshdeskDomain && config.freshdeskApiKey) {
+      const conversation = await fetchFreshdeskTicketConversation({
+        domain: config.freshdeskDomain,
+        apiKey: config.freshdeskApiKey,
+        ticketId: ticketData.sourceReferenceId
+      });
+
+      if (conversation.length > 0) {
+        fullContext = conversation.join("\n\n") + "\n\n[Latest message]\n" + ticketData.description;
+      }
+    }
+
+    // Ingest as pain event with full context
+    await ingestFreshdeskSignal({
+      sourceReferenceId: ticketData.sourceReferenceId,
+      requesterEmail: ticketData.requesterEmail,
+      requesterName: ticketData.requesterName,
+      description: scrubPii(fullContext)
+    }, {
+      processInline: true
+    });
+
+    console.log(`[Freshdesk Webhook] Processed ticket ${ticketData.sourceReferenceId}`);
+  } catch (error) {
+    console.error("[Freshdesk Webhook] Error processing ticket:", error);
+  }
+});
+
+// =============================================
+// Bi-directional Sync (PainSolver -> Freshdesk)
+// =============================================
+
+/**
+ * Notify Freshdesk when a PainSolver post status changes
+ * Called from post update flows
+ */
+export async function notifyFreshdeskStatusChange(input: {
+  postId: string;
+  postTitle: string;
+  oldStatus: string;
+  newStatus: string;
+}): Promise<void> {
+  // Find pain events from Freshdesk that are matched to this post
+  const painEvents = await prisma.painEvent.findMany({
+    where: {
+      source: "freshdesk",
+      matchedPostId: input.postId
+    },
+    select: {
+      sourceReferenceId: true
+    },
+    take: 10
+  });
+
+  if (painEvents.length === 0) return;
+
+  // Get Freshdesk config
+  const config = await prisma.aiInboxConfig.findUnique({
+    where: { source: "freshdesk" },
+    select: {
+      freshdeskDomain: true,
+      freshdeskApiKey: true
+    }
+  });
+
+  if (!config?.freshdeskDomain || !config?.freshdeskApiKey) {
+    console.log("[Freshdesk Sync] No credentials configured, skipping sync");
+    return;
+  }
+
+  const statusEmoji: Record<string, string> = {
+    planned: "📋",
+    in_progress: "🚧",
+    complete: "✅",
+    shipped: "🚀"
+  };
+
+  for (const event of painEvents) {
+    // Extract ticket ID (sourceReferenceId format: "freshdesk-12345" or just "12345")
+    const ticketId = event.sourceReferenceId.replace(/^freshdesk-/, "");
+    
+    try {
+      // Add a note to the Freshdesk ticket
+      const noteBody = `${statusEmoji[input.newStatus] || "📝"} **PainSolver Update**\n\n` +
+        `Feature request "${input.postTitle}" has been moved to **${input.newStatus.replace("_", " ")}**.\n\n` +
+        `View in PainSolver: ${env.APP_URL}/portal?post=${input.postId}`;
+
+      await addFreshdeskTicketNote({
+        domain: config.freshdeskDomain,
+        apiKey: config.freshdeskApiKey,
+        ticketId,
+        body: noteBody,
+        isPrivate: true
+      });
+
+      // Optionally update ticket status if mapping exists
+      const freshdeskStatus = mapPainSolverStatusToFreshdesk(input.newStatus);
+      if (freshdeskStatus && (input.newStatus === "complete" || input.newStatus === "shipped")) {
+        await updateFreshdeskTicketStatus({
+          domain: config.freshdeskDomain,
+          apiKey: config.freshdeskApiKey,
+          ticketId,
+          status: freshdeskStatus
+        });
+      }
+
+      console.log(`[Freshdesk Sync] Updated ticket ${ticketId}`);
+    } catch (error) {
+      console.error(`[Freshdesk Sync] Failed to update ticket ${ticketId}:`, error);
+    }
+  }
+}

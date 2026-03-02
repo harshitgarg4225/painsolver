@@ -1945,6 +1945,7 @@
 
       // Status details
       var freshdeskLastSync = freshdesk.lastTicketSyncAt ? fullDate(freshdesk.lastTicketSyncAt) : "Never";
+      var freshdeskWebhookUrl = window.location.origin + "/api/integrations/freshdesk/webhook";
       var freshdeskStatusHtml = "";
       if (state.errors.freshdesk) {
         freshdeskStatusHtml = '<div class="integration-status has-error">' + esc(state.errors.freshdesk) + '</div>';
@@ -1952,6 +1953,15 @@
         freshdeskStatusHtml = '<div class="integration-status">' +
           '<strong>Domain:</strong> ' + esc(freshdeskDomain) +
           ' • <strong>Last sync:</strong> ' + esc(freshdeskLastSync) +
+          '</div>' +
+          '<div class="integration-setup-hint">' +
+          '<strong>🔔 Real-time Webhooks</strong>: For instant ticket capture, set up a webhook in ' +
+          '<a href="' + esc(freshdeskDomain) + '/admin/automations/ticket_update" target="_blank">Freshdesk Automations</a>:' +
+          '<code class="webhook-url" onclick="navigator.clipboard.writeText(\'' + esc(freshdeskWebhookUrl) + '\'); this.classList.add(\'copied\');">' +
+          esc(freshdeskWebhookUrl) +
+          '<span class="copy-hint">(click to copy)</span>' +
+          '</code>' +
+          '<span class="muted">Trigger on: Ticket Created. Action: POST webhook with ticket fields.</span>' +
           '</div>';
       } else {
         freshdeskStatusHtml = '<div class="integration-status">Enter your Freshdesk domain and API key to connect.</div>';

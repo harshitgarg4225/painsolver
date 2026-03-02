@@ -17,6 +17,7 @@ import {
   sendStatusChangeEmail
 } from "./emailService";
 import { notifySlackStatusChange } from "../routes/slackIntegrationRoutes";
+import { notifyFreshdeskStatusChange } from "../routes/freshdeskIntegrationRoutes";
 
 export type WorkspaceSortMode = "trending" | "top" | "new";
 export type WorkspaceFilterMode =
@@ -2232,6 +2233,14 @@ export async function updatePostForCompany(input: {
             newStatus: normalizePostStatus(updated.status),
             boardId: updated.boardId
           }).catch((err) => console.error("[Slack] Failed to send status notification:", err));
+
+          // Notify Freshdesk tickets if this post came from Freshdesk
+          notifyFreshdeskStatusChange({
+            postId: updated.id,
+            postTitle: updated.title,
+            oldStatus: oldStatus,
+            newStatus: normalizePostStatus(updated.status)
+          }).catch((err) => console.error("[Freshdesk] Failed to send status notification:", err));
         }, 0);
       }
     }
