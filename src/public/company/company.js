@@ -313,6 +313,105 @@
     }, 3000);
   }
 
+  // Freshdesk Activity Modal
+  function showFreshdeskActivityModal(data) {
+    // Remove existing modal if any
+    var existingModal = document.getElementById("freshdesk-activity-modal");
+    if (existingModal) {
+      existingModal.remove();
+    }
+
+    var events = data.events || [];
+    var summary = data.summary || {};
+
+    var eventsHtml = events.length === 0
+      ? '<p class="empty-state">No Freshdesk activity yet. Import tickets or set up a webhook to get started.</p>'
+      : events.map(function (e) {
+          var statusClass = e.status === "auto_merged" ? "status-merged" :
+                            e.status === "needs_triage" ? "status-triage" :
+                            e.status === "pending_ai" ? "status-pending" : "status-skipped";
+          var statusLabel = e.status === "auto_merged" ? "Auto-merged" :
+                            e.status === "needs_triage" ? "Needs Review" :
+                            e.status === "pending_ai" ? "Processing..." : "Skipped";
+          var matchedHtml = e.matchedPost
+            ? '<div class="activity-matched"><span class="ms">link</span> Matched: ' + esc(e.matchedPost.title) + '</div>'
+            : '';
+          var aiHtml = e.aiAction
+            ? '<div class="activity-ai">' +
+                (e.aiAction.category ? '<span class="ai-tag">' + esc(e.aiAction.category) + '</span>' : '') +
+                (e.aiAction.sentiment ? '<span class="ai-tag sentiment-' + esc(e.aiAction.sentiment) + '">' + esc(e.aiAction.sentiment) + '</span>' : '') +
+                (e.aiAction.confidence ? '<span class="ai-confidence">' + Math.round(e.aiAction.confidence * 100) + '% confidence</span>' : '') +
+              '</div>'
+            : '';
+
+          return '<div class="activity-item ' + statusClass + '">' +
+            '<div class="activity-header">' +
+              '<span class="activity-ticket">#' + esc(e.ticketId) + '</span>' +
+              '<span class="activity-status ' + statusClass + '">' + statusLabel + '</span>' +
+              '<span class="activity-time">' + formatRelativeTime(e.createdAt) + '</span>' +
+            '</div>' +
+            '<div class="activity-user">' +
+              '<strong>' + esc(e.user.name || "Unknown") + '</strong> (' + esc(e.user.email) + ')' +
+              (e.user.company ? ' • ' + esc(e.user.company) : '') +
+              (e.user.mrr ? ' • $' + Number(e.user.mrr).toLocaleString() + ' MRR' : '') +
+            '</div>' +
+            '<div class="activity-preview">' + esc(e.preview) + '</div>' +
+            matchedHtml +
+            aiHtml +
+          '</div>';
+        }).join("");
+
+    var summaryHtml =
+      '<div class="activity-summary">' +
+        '<div class="summary-stat"><span class="stat-value">' + (summary.total || 0) + '</span><span class="stat-label">Total</span></div>' +
+        '<div class="summary-stat merged"><span class="stat-value">' + (summary.autoMerged || 0) + '</span><span class="stat-label">Auto-merged</span></div>' +
+        '<div class="summary-stat triage"><span class="stat-value">' + (summary.needsTriage || 0) + '</span><span class="stat-label">Needs Review</span></div>' +
+        '<div class="summary-stat pending"><span class="stat-value">' + (summary.pending || 0) + '</span><span class="stat-label">Processing</span></div>' +
+        '<div class="summary-stat skipped"><span class="stat-value">' + (summary.skipped || 0) + '</span><span class="stat-label">Skipped</span></div>' +
+      '</div>';
+
+    var modalHtml =
+      '<div class="modal-overlay" id="freshdesk-activity-modal">' +
+        '<div class="modal-content activity-modal">' +
+          '<div class="modal-header">' +
+            '<h3><span class="ms">history</span> Freshdesk Activity</h3>' +
+            '<button class="modal-close" data-close-modal><span class="ms">close</span></button>' +
+          '</div>' +
+          summaryHtml +
+          '<div class="activity-list">' + eventsHtml + '</div>' +
+        '</div>' +
+      '</div>';
+
+    document.body.insertAdjacentHTML("beforeend", modalHtml);
+
+    var modal = document.getElementById("freshdesk-activity-modal");
+    if (modal) {
+      modal.addEventListener("click", function (e) {
+        var target = e.target;
+        if (target instanceof HTMLElement) {
+          if (target.classList.contains("modal-overlay") || target.closest("[data-close-modal]")) {
+            modal.remove();
+          }
+        }
+      });
+    }
+  }
+
+  function formatRelativeTime(isoString) {
+    var date = new Date(isoString);
+    var now = new Date();
+    var diffMs = now.getTime() - date.getTime();
+    var diffMins = Math.floor(diffMs / 60000);
+    var diffHours = Math.floor(diffMins / 60);
+    var diffDays = Math.floor(diffHours / 24);
+
+    if (diffMins < 1) return "just now";
+    if (diffMins < 60) return diffMins + "m ago";
+    if (diffHours < 24) return diffHours + "h ago";
+    if (diffDays < 7) return diffDays + "d ago";
+    return date.toLocaleDateString();
+  }
+
   function renderStateCard(kind, title, description) {
     var desc = description ? "<p>" + esc(description) + "</p>" : "";
     var detail = "";
@@ -1982,20 +2081,36 @@
 
       // Action buttons
       freshdeskActions.innerHTML =
+        '<button class="ghost" data-freshdesk-test type="button"' + freshdeskBusy + '>' +
+        '<span class="ms">cable</span> Test Connection' +
+        '</button>' +
         '<button class="ghost" data-freshdesk-fetch-params type="button"' + freshdeskBusy + '>' +
         '<span class="ms">sync</span> Fetch Fields' +
         '</button>' +
         '<button class="primary" data-freshdesk-save-config type="button"' + freshdeskBusy + '>' +
         '<span class="ms">save</span> Save Config' +
         '</button>' +
-        '<button class="primary" data-freshdesk-import type="button"' +
+        '<button class="primary" data-freshdesk-sync-now type="button"' +
         (freshdeskConnected ? "" : " disabled") + freshdeskBusy + '>' +
-        '<span class="ms">download</span> Import Tickets' +
+        '<span class="ms">cloud_sync</span> Sync Now' +
+        '</button>' +
+        '<button class="ghost" data-freshdesk-activity type="button"' +
+        (freshdeskConnected ? "" : " disabled") + freshdeskBusy + '>' +
+        '<span class="ms">history</span> View Activity' +
         '</button>' +
         (freshdeskConnected || freshdesk.hasApiKey || freshdeskDomain
           ? '<button class="ghost" data-freshdesk-disconnect type="button"' + freshdeskBusy + '>' +
             '<span class="ms">link_off</span> Disconnect</button>'
           : '');
+
+      // Test result display
+      var testResultEl = document.getElementById("freshdesk-test-result");
+      if (!testResultEl) {
+        testResultEl = document.createElement("div");
+        testResultEl.id = "freshdesk-test-result";
+        testResultEl.className = "test-result-banner hidden";
+        freshdeskActions.insertAdjacentElement("afterend", testResultEl);
+      }
     }
 
     // Slack Integration Card
@@ -5054,6 +5169,115 @@
             .finally(function () {
               if (importButton instanceof HTMLButtonElement) {
                 setButtonBusy(importButton, false);
+              }
+            });
+          return;
+        }
+
+        // Test Connection button
+        var testButton = target.closest("[data-freshdesk-test]");
+        if (testButton) {
+          if (testButton instanceof HTMLButtonElement) {
+            setButtonBusy(testButton, true, "Testing...");
+          }
+          var domainInput = document.getElementById("freshdesk-domain");
+          var apiKeyInput = document.getElementById("freshdesk-api-key");
+          var domain = domainInput ? domainInput.value : "";
+          var apiKey = apiKeyInput ? apiKeyInput.value : "";
+
+          request("/api/integrations/freshdesk/test-connection", {
+            method: "POST",
+            body: { domain: domain || undefined, apiKey: apiKey || undefined }
+          })
+            .then(function (result) {
+              var resultEl = document.getElementById("freshdesk-test-result");
+              if (resultEl) {
+                resultEl.classList.remove("hidden");
+                if (result.success) {
+                  resultEl.className = "test-result-banner success";
+                  resultEl.innerHTML = '<span class="ms">check_circle</span> ' + esc(result.message) +
+                    (result.details && result.details.sampleFields
+                      ? ' <small>(Fields: ' + esc(result.details.sampleFields.join(", ")) + ')</small>'
+                      : '');
+                } else {
+                  resultEl.className = "test-result-banner error";
+                  resultEl.innerHTML = '<span class="ms">error</span> ' + esc(result.error);
+                }
+                setTimeout(function () { resultEl.classList.add("hidden"); }, 8000);
+              }
+            })
+            .catch(function (error) {
+              var resultEl = document.getElementById("freshdesk-test-result");
+              if (resultEl) {
+                resultEl.classList.remove("hidden");
+                resultEl.className = "test-result-banner error";
+                resultEl.innerHTML = '<span class="ms">error</span> ' + esc(error.message || "Connection test failed");
+                setTimeout(function () { resultEl.classList.add("hidden"); }, 8000);
+              }
+            })
+            .finally(function () {
+              if (testButton instanceof HTMLButtonElement) {
+                setButtonBusy(testButton, false);
+              }
+            });
+          return;
+        }
+
+        // Sync Now button
+        var syncNowButton = target.closest("[data-freshdesk-sync-now]");
+        if (syncNowButton) {
+          if (syncNowButton instanceof HTMLButtonElement) {
+            setButtonBusy(syncNowButton, true, "Syncing...");
+          }
+          request("/api/integrations/freshdesk/sync-now", {
+            method: "POST",
+            body: { daysBack: 7, maxTickets: 50 }
+          })
+            .then(function (result) {
+              state.freshdeskConnection = result.connection || state.freshdeskConnection;
+              state.errors.freshdesk = "";
+              var msg = "Freshdesk sync complete: " +
+                result.scanned + " scanned, " +
+                result.matched + " matched filter, " +
+                result.imported + " imported";
+              if (result.errors > 0) {
+                msg += ", " + result.errors + " errors";
+              }
+              pushToast(result.success ? "success" : "warning", msg);
+              return Promise.all([
+                loadFreshdeskStatus(),
+                loadTriage(),
+                loadSummary(),
+                loadFeedback()
+              ]);
+            })
+            .catch(function (error) {
+              pushToast("error", error.message || "Sync failed.");
+            })
+            .finally(function () {
+              if (syncNowButton instanceof HTMLButtonElement) {
+                setButtonBusy(syncNowButton, false);
+              }
+            });
+          return;
+        }
+
+        // View Activity button
+        var activityButton = target.closest("[data-freshdesk-activity]");
+        if (activityButton) {
+          if (activityButton instanceof HTMLButtonElement) {
+            setButtonBusy(activityButton, true, "Loading...");
+          }
+          request("/api/integrations/freshdesk/activity")
+            .then(function (result) {
+              showFreshdeskActivityModal(result);
+            })
+            .catch(function (error) {
+              pushToast("error", error.message || "Failed to load activity.");
+            })
+            .finally(function () {
+              if (activityButton instanceof HTMLButtonElement) {
+                setButtonBusy(activityButton, false);
               }
             });
           return;

@@ -47,13 +47,11 @@ const freshdeskConfigSelect = {
   freshdeskFieldCatalog: true,
   freshdeskLastFieldSyncAt: true,
   freshdeskLastTicketSyncAt: true
-} satisfies Prisma.AiInboxConfigSelect;
+};
 
-type FreshdeskConfigRecord = Prisma.AiInboxConfigGetPayload<{
-  select: typeof freshdeskConfigSelect;
-}>;
+type FreshdeskConfigRecord = Awaited<ReturnType<typeof ensureFreshdeskConfigRaw>>;
 
-async function ensureFreshdeskConfig(): Promise<FreshdeskConfigRecord> {
+async function ensureFreshdeskConfigRaw() {
   return prisma.aiInboxConfig.upsert({
     where: {
       source: "freshdesk"
@@ -66,6 +64,10 @@ async function ensureFreshdeskConfig(): Promise<FreshdeskConfigRecord> {
     },
     select: freshdeskConfigSelect
   });
+}
+
+async function ensureFreshdeskConfig(): Promise<FreshdeskConfigRecord> {
+  return ensureFreshdeskConfigRaw();
 }
 
 async function syncFreshdeskParams(config: FreshdeskConfigRecord): Promise<{
@@ -89,7 +91,7 @@ async function syncFreshdeskParams(config: FreshdeskConfigRecord): Promise<{
       id: config.id
     },
     data: {
-      freshdeskFieldCatalog: params as unknown as Prisma.InputJsonValue,
+      freshdeskFieldCatalog: JSON.parse(JSON.stringify(params)),
       freshdeskLastFieldSyncAt: new Date()
     },
     select: freshdeskConfigSelect
@@ -139,6 +141,253 @@ export const freshdeskIntegrationRoutes = Router();
 
 freshdeskIntegrationRoutes.use(requireCompanyWriteAccess);
 
+// =============================================
+// Test Connection - Validates credentials
+// =============================================
+freshdeskIntegrationRoutes.post("/test-connection", async (req, res) => {
+  const { domain, apiKey } = req.body as { domain?: string; apiKey?: string };
+  
+  const config = await ensureFreshdeskConfig();
+  const testDomain = domain || config.freshdeskDomain;
+  const testApiKey = apiKey || config.freshdeskApiKey;
+
+  if (!testDomain || !testApiKey) {
+    res.status(400).json({ 
+      success: false, 
+      error: "Missing domain or API key",
+      details: { domain: !testDomain, apiKey: !testApiKey }
+    });
+    return;
+  }
+
+  try {
+    // Test by fetching ticket fields (lightweight API call)
+    const fields = await listFreshdeskTicketFields({
+      domain: testDomain,
+      apiKey: testApiKey
+    });
+
+    res.status(200).json({
+      success: true,
+      message: "Connection successful!",
+      details: {
+        fieldsFound: fields.length,
+        sampleFields: fields.slice(0, 5).map(f => f.label)
+      }
+    });
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : "Unknown error";
+    const isAuthError = errorMessage.includes("401") || errorMessage.includes("403");
+    const isDomainError = errorMessage.includes("ENOTFOUND") || errorMessage.includes("getaddrinfo");
+
+    res.status(200).json({
+      success: false,
+      error: isAuthError 
+        ? "Invalid API key. Check your Freshdesk API key in Profile Settings."
+        : isDomainError 
+        ? "Invalid domain. Make sure your Freshdesk subdomain is correct."
+        : `Connection failed: ${errorMessage}`,
+      details: { isAuthError, isDomainError }
+    });
+  }
+});
+
+// =============================================
+// Activity Log - Recent processed events
+// =============================================
+freshdeskIntegrationRoutes.get("/activity", async (_req, res) => {
+  try {
+    const recentEvents = await prisma.painEvent.findMany({
+      where: { source: "freshdesk" },
+      orderBy: { createdAt: "desc" },
+      take: 20,
+      select: {
+        id: true,
+        sourceReferenceId: true,
+        status: true,
+        createdAt: true,
+        rawText: true,
+        matchedPostId: true,
+        matchedPost: {
+          select: {
+            id: true,
+            title: true
+          }
+        },
+        user: {
+          select: {
+            email: true,
+            name: true,
+            company: {
+              select: {
+                name: true,
+                monthlySpend: true
+              }
+            }
+          }
+        },
+        aiActionLog: {
+          select: {
+            actionTaken: true,
+            confidenceScore: true,
+            metadata: true
+          }
+        }
+      }
+    });
+
+    const summary = await prisma.painEvent.groupBy({
+      by: ["status"],
+      where: { source: "freshdesk" },
+      _count: { id: true }
+    });
+
+    const summaryMap: Record<string, number> = {};
+    summary.forEach((s: { status: string; _count: { id: number } }) => {
+      summaryMap[s.status] = s._count.id;
+    });
+
+    res.status(200).json({
+      events: recentEvents.map((e: typeof recentEvents[number]) => ({
+        id: e.id,
+        ticketId: e.sourceReferenceId.replace("freshdesk-", ""),
+        status: e.status,
+        createdAt: e.createdAt.toISOString(),
+        preview: e.rawText.slice(0, 150) + (e.rawText.length > 150 ? "..." : ""),
+        user: {
+          email: e.user.email,
+          name: e.user.name,
+          company: e.user.company.name,
+          mrr: e.user.company.monthlySpend
+        },
+        matchedPost: e.matchedPost ? {
+          id: e.matchedPost.id,
+          title: e.matchedPost.title
+        } : null,
+        aiAction: e.aiActionLog ? {
+          action: e.aiActionLog.actionTaken,
+          confidence: e.aiActionLog.confidenceScore,
+          category: (e.aiActionLog.metadata as Record<string, unknown>)?.category,
+          sentiment: (e.aiActionLog.metadata as Record<string, unknown>)?.sentiment
+        } : null
+      })),
+      summary: {
+        total: Object.values(summaryMap).reduce((a, b) => a + b, 0),
+        autoMerged: summaryMap.auto_merged || 0,
+        needsTriage: summaryMap.needs_triage || 0,
+        pending: summaryMap.pending_ai || 0,
+        skipped: summaryMap.skipped || 0
+      }
+    });
+  } catch (error) {
+    console.error("Failed to fetch Freshdesk activity:", error);
+    res.status(500).json({ error: "Failed to fetch activity log" });
+  }
+});
+
+// =============================================
+// Sync Now - Manual trigger with progress
+// =============================================
+freshdeskIntegrationRoutes.post("/sync-now", async (req, res) => {
+  const config = await ensureFreshdeskConfig();
+  const domain = config.freshdeskDomain ?? "";
+  const apiKey = config.freshdeskApiKey ?? "";
+
+  if (!config.enabled) {
+    res.status(400).json({ error: "Freshdesk integration is paused. Enable it first." });
+    return;
+  }
+
+  if ((!domain || !apiKey) && !env.USE_MOCK_FRESHDESK) {
+    res.status(400).json({ error: "Freshdesk not configured. Add domain and API key first." });
+    return;
+  }
+
+  const { daysBack = 7, maxTickets = 50 } = req.body as { daysBack?: number; maxTickets?: number };
+
+  try {
+    const tickets = await listFreshdeskTickets({
+      domain,
+      apiKey,
+      daysBack: Math.min(daysBack, 30),
+      maxTickets: Math.min(maxTickets, 100)
+    });
+
+    const results = {
+      scanned: tickets.length,
+      matched: 0,
+      imported: 0,
+      skipped: 0,
+      errors: 0,
+      details: [] as Array<{ ticketId: string; status: string; error?: string }>
+    };
+
+    for (const ticket of tickets) {
+      const matches = matchesFreshdeskFieldFilter({
+        payload: ticket.rawTicket,
+        filterField: config.freshdeskFilterField,
+        filterValue: config.freshdeskFilterValue
+      });
+
+      if (!matches) {
+        results.skipped++;
+        continue;
+      }
+
+      results.matched++;
+
+      try {
+        // Get conversation for full context
+        let fullDescription = ticket.description;
+        if (domain && apiKey) {
+          const conversation = await fetchFreshdeskTicketConversation({
+            domain,
+            apiKey,
+            ticketId: ticket.sourceReferenceId
+          });
+          if (conversation.length > 0) {
+            fullDescription = conversation.join("\n\n") + "\n\n---\n\n" + ticket.description;
+          }
+        }
+
+        await ingestFreshdeskSignal({
+          sourceReferenceId: ticket.sourceReferenceId,
+          requesterEmail: ticket.requesterEmail,
+          requesterName: ticket.requesterName,
+          description: scrubPii(fullDescription)
+        }, { processInline: true });
+
+        results.imported++;
+        results.details.push({ ticketId: ticket.sourceReferenceId, status: "imported" });
+      } catch (err) {
+        results.errors++;
+        results.details.push({ 
+          ticketId: ticket.sourceReferenceId, 
+          status: "error",
+          error: err instanceof Error ? err.message : "Unknown error"
+        });
+      }
+    }
+
+    await prisma.aiInboxConfig.update({
+      where: { id: config.id },
+      data: { freshdeskLastTicketSyncAt: new Date() }
+    });
+
+    res.status(200).json({
+      success: true,
+      ...results,
+      connection: statusFromFreshdeskConfig(config)
+    });
+  } catch (error) {
+    console.error("Freshdesk sync failed:", error);
+    res.status(500).json({ 
+      success: false,
+      error: error instanceof Error ? error.message : "Sync failed" 
+    });
+  }
+});
+
 freshdeskIntegrationRoutes.get("/status", async (_req, res) => {
   const config = await ensureFreshdeskConfig();
   res.status(200).json({
@@ -161,7 +410,7 @@ freshdeskIntegrationRoutes.post("/configure", async (req, res) => {
   const existing = await ensureFreshdeskConfig();
   const payload = parsed.data;
 
-  const updateData: Prisma.AiInboxConfigUpdateInput = {};
+  const updateData: Record<string, unknown> = {};
 
   try {
     if (typeof payload.domain === "string") {
@@ -340,7 +589,7 @@ freshdeskIntegrationRoutes.post("/disconnect", async (_req, res) => {
       freshdeskApiKey: null,
       freshdeskFilterField: null,
       freshdeskFilterValue: null,
-      freshdeskFieldCatalog: Prisma.JsonNull,
+      freshdeskFieldCatalog: null as unknown as object,
       freshdeskLastFieldSyncAt: null,
       freshdeskLastTicketSyncAt: null
     },
