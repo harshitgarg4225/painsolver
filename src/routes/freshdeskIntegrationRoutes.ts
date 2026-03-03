@@ -137,6 +137,109 @@ function fieldsFromConfig(config: FreshdeskConfigRecord): Array<{
 
 export const freshdeskIntegrationRoutes = Router();
 
+// =============================================
+// Freshdesk Webhook (Real-time ticket events)
+// Registered BEFORE requireCompanyWriteAccess since
+// Freshdesk sends webhooks without company auth headers.
+// =============================================
+
+/**
+ * Webhook endpoint for Freshdesk automation rules
+ * Configure in Freshdesk: Admin -> Automations -> Ticket Updates -> Webhook
+ * URL: {APP_URL}/api/integrations/freshdesk/webhook
+ * Add header: x-freshdesk-webhook-token: <your FRESHDESK_WEBHOOK_TOKEN from .env>
+ */
+freshdeskIntegrationRoutes.post("/webhook", async (req, res) => {
+  // Verify webhook authentication token
+  const expectedToken = env.FRESHDESK_WEBHOOK_TOKEN;
+  if (expectedToken) {
+    const providedToken = req.headers["x-freshdesk-webhook-token"] as string | undefined;
+    if (providedToken !== expectedToken) {
+      console.warn("[Freshdesk Webhook] Authentication failed - invalid or missing token");
+      res.status(401).json({ error: "Unauthorized" });
+      return;
+    }
+  } else {
+    console.warn("[Freshdesk Webhook] No FRESHDESK_WEBHOOK_TOKEN configured - webhook is unauthenticated");
+  }
+
+  const payload = req.body as FreshdeskWebhookPayload;
+
+  console.log("[Freshdesk Webhook] Received event:", {
+    ticketId: payload.ticket_id,
+    event: payload.triggered_event,
+    subject: payload.ticket_subject
+  });
+
+  // Parse the webhook payload
+  const ticketData = parseWebhookPayload(payload);
+  if (!ticketData) {
+    res.status(200).json({ ok: true, ignored: true, reason: "invalid_payload" });
+    return;
+  }
+
+  // Get Freshdesk config to check filters
+  const config = await ensureFreshdeskConfig();
+
+  if (!config.enabled) {
+    res.status(200).json({ ok: true, ignored: true, reason: "source_disabled" });
+    return;
+  }
+
+  // Check if ticket matches filters (try both raw payload and nested ticket object)
+  const matchesRaw = matchesFreshdeskFieldFilter({
+    payload: ticketData.rawTicket,
+    filterField: config.freshdeskFilterField,
+    filterValue: config.freshdeskFilterValue
+  });
+  const matchesRoot = matchesFreshdeskFieldFilter({
+    payload: payload,
+    filterField: config.freshdeskFilterField,
+    filterValue: config.freshdeskFilterValue
+  });
+
+  if (!matchesRaw && !matchesRoot) {
+    res.status(200).json({ ok: true, ignored: true, reason: "filter_no_match" });
+    return;
+  }
+
+  // Respond 202 Accepted - processing continues async
+  res.status(202).json({ ok: true, ticketId: ticketData.sourceReferenceId });
+
+  try {
+    // Fetch full conversation if we have API credentials
+    let fullContext = ticketData.description;
+    if (config.freshdeskDomain && config.freshdeskApiKey) {
+      try {
+        const conversation = await fetchFreshdeskTicketConversation({
+          domain: config.freshdeskDomain,
+          apiKey: config.freshdeskApiKey,
+          ticketId: ticketData.sourceReferenceId
+        });
+        if (conversation.length > 0) {
+          fullContext = conversation.join("\n\n") + "\n\n[Latest message]\n" + ticketData.description;
+        }
+      } catch (convErr) {
+        console.warn("[Freshdesk Webhook] Failed to fetch conversation, using description only:", convErr);
+      }
+    }
+
+    await ingestFreshdeskSignal({
+      sourceReferenceId: ticketData.sourceReferenceId,
+      requesterEmail: ticketData.requesterEmail,
+      requesterName: ticketData.requesterName,
+      description: scrubPii(fullContext)
+    }, {
+      processInline: true
+    });
+
+    console.log(`[Freshdesk Webhook] Processed ticket ${ticketData.sourceReferenceId}`);
+  } catch (error) {
+    console.error("[Freshdesk Webhook] Error processing ticket:", error);
+  }
+});
+
+// All routes below require company admin/member auth
 freshdeskIntegrationRoutes.use(requireCompanyWriteAccess);
 
 freshdeskIntegrationRoutes.get("/status", async (_req, res) => {
@@ -292,12 +395,31 @@ freshdeskIntegrationRoutes.post("/import-tickets", async (req, res) => {
       }
 
       matched += 1;
+
+      // Enrich with conversation context if API credentials available
+      let enrichedDescription = ticket.description;
+      if (domain && apiKey) {
+        try {
+          const conversation = await fetchFreshdeskTicketConversation({
+            domain,
+            apiKey,
+            ticketId: ticket.sourceReferenceId
+          });
+          if (conversation.length > 0) {
+            enrichedDescription = conversation.join("\n\n") + "\n\n[Ticket description]\n" + ticket.description;
+          }
+        } catch (convErr) {
+          // Continue with original description if conversation fetch fails
+          console.warn(`[Freshdesk Import] Failed to fetch conversation for ticket ${ticket.sourceReferenceId}:`, convErr);
+        }
+      }
+
       await ingestFreshdeskSignal(
         {
           sourceReferenceId: ticket.sourceReferenceId,
           requesterEmail: ticket.requesterEmail,
           requesterName: ticket.requesterName,
-          description: ticket.description
+          description: enrichedDescription
         },
         {
           processInline
@@ -352,101 +474,6 @@ freshdeskIntegrationRoutes.post("/disconnect", async (_req, res) => {
     connection: statusFromFreshdeskConfig(updated),
     params: []
   });
-});
-
-// =============================================
-// Freshdesk Webhook (Real-time ticket events)
-// =============================================
-
-/**
- * Webhook endpoint for Freshdesk automation rules
- * Configure in Freshdesk: Admin -> Automations -> Ticket Updates -> Webhook
- * URL: https://painsolver.vercel.app/api/integrations/freshdesk/webhook
- */
-freshdeskIntegrationRoutes.post("/webhook", async (req, res) => {
-  // Respond immediately (Freshdesk expects quick response)
-  res.status(200).json({ ok: true });
-
-  const payload = req.body as FreshdeskWebhookPayload;
-  
-  console.log("[Freshdesk Webhook] Received event:", {
-    ticketId: payload.ticket_id,
-    event: payload.triggered_event,
-    subject: payload.ticket_subject
-  });
-
-  // Parse the webhook payload
-  const ticketData = parseWebhookPayload(payload);
-  if (!ticketData) {
-    console.log("[Freshdesk Webhook] Skipping - invalid or empty ticket data");
-    return;
-  }
-
-  // Get Freshdesk config to check filters
-  const config = await ensureFreshdeskConfig();
-  
-  if (!config.enabled) {
-    console.log("[Freshdesk Webhook] Skipping - Freshdesk source is disabled");
-    return;
-  }
-
-  // Check if ticket matches filters
-  const matches = matchesFreshdeskFieldFilter({
-    payload: ticketData.rawTicket,
-    filterField: config.freshdeskFilterField,
-    filterValue: config.freshdeskFilterValue
-  });
-
-  if (!matches) {
-    console.log("[Freshdesk Webhook] Skipping - ticket doesn't match filters");
-    return;
-  }
-
-  try {
-    // Check for duplicate
-    const sourceReferenceId = `freshdesk-${ticketData.sourceReferenceId}`;
-    const existing = await prisma.painEvent.findUnique({
-      where: {
-        source_sourceReferenceId: {
-          source: "freshdesk",
-          sourceReferenceId
-        }
-      }
-    });
-
-    if (existing) {
-      console.log("[Freshdesk Webhook] Duplicate ticket, skipping");
-      return;
-    }
-
-    // Fetch full conversation if we have API credentials
-    let fullContext = ticketData.description;
-    if (config.freshdeskDomain && config.freshdeskApiKey) {
-      const conversation = await fetchFreshdeskTicketConversation({
-        domain: config.freshdeskDomain,
-        apiKey: config.freshdeskApiKey,
-        ticketId: ticketData.sourceReferenceId
-      });
-
-      if (conversation.length > 0) {
-        fullContext = conversation.join("\n\n") + "\n\n[Latest message]\n" + ticketData.description;
-      }
-    }
-
-    // Ingest as pain event with full context
-    await ingestFreshdeskSignal({
-      sourceReferenceId: ticketData.sourceReferenceId,
-      requesterEmail: ticketData.requesterEmail,
-      requesterName: ticketData.requesterName,
-      description: scrubPii(fullContext)
-    }, {
-      processInline: true
-    });
-
-    console.log(`[Freshdesk Webhook] Processed ticket ${ticketData.sourceReferenceId}`);
-  } catch (error) {
-    console.error("[Freshdesk Webhook] Error processing ticket:", error);
-  }
 });
 
 // =============================================

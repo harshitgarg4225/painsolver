@@ -1605,6 +1605,7 @@ export async function createPostAsActor(input: {
         description: input.details,
         status: "under_review",
         ownerName: "Unassigned",
+        authorId: actorUser.id,
         explicitVoteCount: 1,
         totalAttachedMrr: actorUser.company.monthlySpend
       }

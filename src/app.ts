@@ -25,6 +25,7 @@ import { usersRoutes } from "./routes/usersRoutes";
 import { votesRoutes } from "./routes/votesRoutes";
 import { webhooksRoutes } from "./routes/webhooksRoutes";
 import { zoomIntegrationRoutes } from "./routes/zoomIntegrationRoutes";
+import { onboardingRoutes } from "./routes/onboardingRoutes";
 import { slackIntegrationRoutes } from "./routes/slackIntegrationRoutes";
 
 export const app = express();
@@ -119,6 +120,7 @@ app.get("/dashboard", (_req, res) => {
   res.sendFile(dashboardPath);
 });
 
+app.use("/api/onboarding", onboardingRoutes);
 app.use("/api/webhooks", webhooksRoutes);
 app.use("/api/integrations/freshdesk", freshdeskIntegrationRoutes);
 app.use("/api/integrations/zoom", zoomIntegrationRoutes);

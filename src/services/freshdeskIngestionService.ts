@@ -121,10 +121,6 @@ export async function ingestFreshdeskSignal(
     isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted
   });
 
-  await aiProcessingQueue.add("process-pain-event", {
-    painEventId: painEvent.id
-  });
-
   if (options?.processInline) {
     await processPainEvent(painEvent.id);
     return {
@@ -132,6 +128,11 @@ export async function ingestFreshdeskSignal(
       status: "processed"
     };
   }
+
+  // Only enqueue if not processing inline to avoid double processing
+  await aiProcessingQueue.add("process-pain-event", {
+    painEventId: painEvent.id
+  });
 
   return {
     painEventId: painEvent.id,

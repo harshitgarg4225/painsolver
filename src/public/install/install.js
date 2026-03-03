@@ -142,15 +142,47 @@
   }
 
   function submitSetup() {
-    // In a real implementation, this would:
-    // 1. POST to /api/v1/onboarding/setup with company/board/tools info
-    // 2. Backend creates board, API credentials, returns tokens
-    // 3. Display the real credentials
-    
-    // For now, generate demo credentials
-    generateCredentials();
-    renderInstallStep();
-    showStep(4);
+    var submitBtn = el.processForm ? el.processForm.querySelector('button[type="submit"]') : null;
+    if (submitBtn) {
+      submitBtn.disabled = true;
+      submitBtn.textContent = "Setting up...";
+    }
+
+    fetch("/api/onboarding/setup", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        companyName: state.companyName,
+        boardName: state.boardName,
+        adminEmail: state.companyName.toLowerCase().replace(/[^a-z0-9]/g, "") + "@setup.painsolver.io",
+        mrrRange: state.mrrRange,
+        tools: state.tools,
+        currentProcess: state.currentProcess
+      })
+    })
+      .then(function (res) {
+        if (!res.ok) throw new Error("Setup failed: " + res.status);
+        return res.json();
+      })
+      .then(function (data) {
+        state.boardToken = data.boardToken;
+        state.apiKey = data.apiKey;
+        state.clientSecret = data.clientSecret;
+        renderInstallStep();
+        showStep(4);
+      })
+      .catch(function (err) {
+        console.error("Setup failed, using demo credentials:", err);
+        generateCredentials();
+        renderInstallStep();
+        showStep(4);
+      })
+      .finally(function () {
+        if (submitBtn) {
+          submitBtn.disabled = false;
+          submitBtn.textContent = "Complete Setup";
+        }
+      });
   }
 
   // Event Listeners

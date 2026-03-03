@@ -262,6 +262,9 @@ function mockTickets(): FreshdeskTicketImportItem[] {
     .filter((ticket): ticket is FreshdeskTicketImportItem => Boolean(ticket));
 }
 
+const FRESHDESK_MAX_RETRIES = 3;
+const FRESHDESK_BASE_DELAY_MS = 1000;
+
 async function fetchFreshdeskJson<T>(input: {
   domain: string;
   apiKey: string;
@@ -273,20 +276,46 @@ async function fetchFreshdeskJson<T>(input: {
     url.searchParams.set(key, value);
   });
 
-  const response = await fetch(url.toString(), {
-    method: "GET",
-    headers: {
-      Authorization: authHeader(input.apiKey),
-      "Content-Type": "application/json"
-    }
-  });
+  let lastError: Error | null = null;
 
-  if (!response.ok) {
+  for (let attempt = 0; attempt <= FRESHDESK_MAX_RETRIES; attempt++) {
+    if (attempt > 0) {
+      const delay = FRESHDESK_BASE_DELAY_MS * Math.pow(2, attempt - 1);
+      await new Promise((resolve) => setTimeout(resolve, delay));
+    }
+
+    const response = await fetch(url.toString(), {
+      method: "GET",
+      headers: {
+        Authorization: authHeader(input.apiKey),
+        "Content-Type": "application/json"
+      }
+    });
+
+    if (response.ok) {
+      return (await response.json()) as T;
+    }
+
+    // Retry on rate limit (429) and server errors (5xx)
+    if (response.status === 429 || response.status >= 500) {
+      const retryAfter = response.headers.get("retry-after");
+      if (retryAfter && attempt < FRESHDESK_MAX_RETRIES) {
+        const waitMs = parseInt(retryAfter, 10) * 1000;
+        if (!isNaN(waitMs) && waitMs > 0 && waitMs <= 30000) {
+          await new Promise((resolve) => setTimeout(resolve, waitMs));
+        }
+      }
+      lastError = new Error(`Freshdesk API failed (${response.status})`);
+      console.warn(`[Freshdesk] API ${response.status} on ${input.path}, attempt ${attempt + 1}/${FRESHDESK_MAX_RETRIES + 1}`);
+      continue;
+    }
+
+    // Non-retryable error
     const errorText = await response.text();
     throw new Error(`Freshdesk API failed (${response.status}): ${errorText}`);
   }
 
-  return (await response.json()) as T;
+  throw lastError || new Error("Freshdesk API failed after retries");
 }
 
 export async function listFreshdeskTicketFields(input: {

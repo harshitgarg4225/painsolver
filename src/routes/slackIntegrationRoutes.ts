@@ -525,10 +525,22 @@ async function processSlackEventMessage(msg: SlackEventMessage): Promise<void> {
     context += " (thread reply)";
   }
 
-  // Get user info
+  // Get user info and map to PainSolver user for correct MRR attribution
   const userInfo = await fetchSlackUserInfo(connection.accessToken, msg.userId);
   if (userInfo?.name) {
     context += ` • From: ${userInfo.name}`;
+  }
+
+  // Try to map Slack user email to a PainSolver user for accurate attribution
+  let painEventUserId = connection.userId;
+  const slackUserEmail = userInfo?.email;
+  if (slackUserEmail) {
+    const matchedUser = await prisma.user.findUnique({
+      where: { email: slackUserEmail.toLowerCase() }
+    });
+    if (matchedUser) {
+      painEventUserId = matchedUser.id;
+    }
   }
 
   // Check for duplicate
@@ -557,7 +569,7 @@ async function processSlackEventMessage(msg: SlackEventMessage): Promise<void> {
 
   const painEvent = await prisma.painEvent.create({
     data: {
-      userId: connection.userId,
+      userId: painEventUserId,
       source: "slack",
       sourceReferenceId,
       rawText: rawText.slice(0, 20000),

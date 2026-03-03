@@ -472,22 +472,42 @@ portalRoutes.get("/me", async (req, res) => {
 portalRoutes.get("/users/:userId/submissions", async (req, res) => {
   const { userId } = req.params;
 
-  // A user's "submissions" are posts they created, identified by an explicit vote
-  const votes = await prisma.vote.findMany({
-    where: {
-      userId,
-      voteType: "explicit"
+  // Query posts authored by this user (authorId set on creation)
+  const authoredPosts = await prisma.post.findMany({
+    where: { authorId: userId },
+    include: {
+      board: { select: { id: true, name: true } },
+      _count: { select: { votes: true, comments: true } }
     },
+    orderBy: { createdAt: "desc" },
+    take: 100
+  });
+
+  if (authoredPosts.length > 0) {
+    res.status(200).json({
+      submissions: authoredPosts.map((post) => ({
+        id: post.id,
+        title: post.title,
+        description: post.description,
+        status: post.status,
+        voteCount: post._count.votes,
+        commentCount: post._count.comments,
+        board: post.board,
+        boardName: post.board?.name,
+        createdAt: post.createdAt
+      }))
+    });
+    return;
+  }
+
+  // Fallback for legacy posts without authorId: use explicit votes as proxy
+  const votes = await prisma.vote.findMany({
+    where: { userId, voteType: "explicit" },
     include: {
       post: {
         include: {
           board: { select: { id: true, name: true } },
-          _count: {
-            select: {
-              votes: true,
-              comments: true
-            }
-          }
+          _count: { select: { votes: true, comments: true } }
         }
       }
     },
@@ -495,21 +515,21 @@ portalRoutes.get("/users/:userId/submissions", async (req, res) => {
     take: 100
   });
 
-  const submissions = votes
-    .filter((v) => v.post)
-    .map((v) => ({
-      id: v.post.id,
-      title: v.post.title,
-      description: v.post.description,
-      status: v.post.status,
-      voteCount: v.post._count.votes,
-      commentCount: v.post._count.comments,
-      board: v.post.board,
-      boardName: v.post.board?.name,
-      createdAt: v.post.createdAt
-    }));
-
-  res.status(200).json({ submissions });
+  res.status(200).json({
+    submissions: votes
+      .filter((v) => v.post)
+      .map((v) => ({
+        id: v.post.id,
+        title: v.post.title,
+        description: v.post.description,
+        status: v.post.status,
+        voteCount: v.post._count.votes,
+        commentCount: v.post._count.comments,
+        board: v.post.board,
+        boardName: v.post.board?.name,
+        createdAt: v.post.createdAt
+      }))
+  });
 });
 
 portalRoutes.get("/users/:userId/votes", async (req, res) => {

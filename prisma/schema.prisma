@@ -105,6 +105,7 @@ model User {
   votes                Vote[]
   painEvents           PainEvent[]
   comments             Comment[]               @relation("CommentAuthor")
+  authoredPosts        Post[]                  @relation("PostAuthor")
   accessRequests       AccessRequest[]
   notifications        Notification[]
   notificationPref     NotificationPreference?
@@ -158,8 +159,10 @@ model Post {
   totalAttachedMrr  Float             @default(0)
   implicitVoteCount Int               @default(0)
   explicitVoteCount Int               @default(0)
+  authorId          String?
   embedding         Unsupported("vector(1536)")?
   mergedIntoPostId  String?
+  author            User?             @relation("PostAuthor", fields: [authorId], references: [id], onDelete: SetNull)
   board             Board             @relation(fields: [boardId], references: [id], onDelete: Cascade)
   category          Category          @relation(fields: [categoryId], references: [id], onDelete: Restrict)
   votes             Vote[]
@@ -176,6 +179,7 @@ model Post {
   @@index([categoryId])
   @@index([totalAttachedMrr])
   @@index([mergedIntoPostId])
+  @@index([authorId])
 }
 
 model Vote {

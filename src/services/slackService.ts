@@ -124,6 +124,7 @@ export function buildSlackAuthorizeUrl(state: string): string {
     "groups:history",
     "groups:read",
     "users:read",
+    "users:read.email", // Required to get user email for PainSolver user mapping
     "team:read",
     "app_mentions:read" // Respond to @mentions
   ].join(",");

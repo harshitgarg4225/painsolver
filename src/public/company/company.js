@@ -1974,6 +1974,7 @@
           '<span class="copy-hint">(click to copy)</span>' +
           '</code>' +
           '<span class="muted">Trigger on: Ticket Created. Action: POST webhook with ticket fields.</span>' +
+          '<span class="muted">For authentication, add custom header: <strong>x-freshdesk-webhook-token</strong> with your <code>FRESHDESK_WEBHOOK_TOKEN</code> env value.</span>' +
           '</div>';
       } else {
         freshdeskStatusHtml = '<div class="integration-status">Enter your Freshdesk domain and API key to connect.</div>';

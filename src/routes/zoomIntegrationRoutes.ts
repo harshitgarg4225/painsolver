@@ -556,6 +556,17 @@ async function processZoomRecordingEvent(payload: ZoomWebhookPayload): Promise<v
       const hostEmail = recording.host_email ?? null;
       const startedAt = recording.start_time ?? null;
 
+      // Map host email to PainSolver user for accurate attribution
+      let painEventUserId = connection.userId;
+      if (hostEmail) {
+        const hostUser = await prisma.user.findUnique({
+          where: { email: hostEmail.toLowerCase() }
+        });
+        if (hostUser) {
+          painEventUserId = hostUser.id;
+        }
+      }
+
       // Create pain events for each identified segment
       for (let i = 0; i < feedbackSegments.length; i++) {
         const segment = feedbackSegments[i];
@@ -592,7 +603,7 @@ async function processZoomRecordingEvent(payload: ZoomWebhookPayload): Promise<v
 
         const painEvent = await prisma.painEvent.create({
           data: {
-            userId: connection.userId,
+            userId: painEventUserId,
             source: "zoom",
             sourceReferenceId: segmentId,
             rawText: rawText.slice(0, 20000),
@@ -600,7 +611,7 @@ async function processZoomRecordingEvent(payload: ZoomWebhookPayload): Promise<v
           }
         });
 
-        console.log(`[Zoom Webhook] Created pain event ${painEvent.id} for segment ${i + 1}`);
+        console.log(`[Zoom Webhook] Created pain event ${painEvent.id} for segment ${i + 1} (user: ${painEventUserId})`);
 
         // Process immediately
         try {

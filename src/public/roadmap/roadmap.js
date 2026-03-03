@@ -97,30 +97,6 @@
       });
   }
 
-  function loadCompanyInfo() {
-    if (!state.companySlug) {
-      // Default demo mode - use first available workspace
-      return api("/api/portal/workspaces")
-        .then(function (data) {
-          if (data.workspaces && data.workspaces.length > 0) {
-            var ws = data.workspaces[0];
-            state.companySlug = ws.slug || ws.id;
-            el.companyName.textContent = ws.name || "Product";
-            document.title = (ws.name || "Product") + " Roadmap - PainSolver";
-            return ws;
-          }
-          throw new Error("No workspaces found");
-        });
-    }
-    
-    return api("/api/portal/workspaces/" + state.companySlug)
-      .then(function (ws) {
-        el.companyName.textContent = ws.name || "Product";
-        document.title = (ws.name || "Product") + " Roadmap - PainSolver";
-        return ws;
-      });
-  }
-
   function loadBoards() {
     return api("/api/portal/boards")
       .then(function (data) {
@@ -391,12 +367,17 @@
     });
 
     // Load data
-    loadCompanyInfo()
-      .then(loadBoards)
+    el.companyName.textContent = "Product Roadmap";
+    document.title = "Product Roadmap - PainSolver";
+    loadBoards()
+      .then(function () {
+        if (state.boards.length > 0) {
+          el.companyName.textContent = state.boards[0].name + " Roadmap";
+          document.title = state.boards[0].name + " Roadmap - PainSolver";
+        }
+      })
       .catch(function (err) {
-        console.error("Failed to initialize roadmap:", err);
-        el.companyName.textContent = "Product";
-        loadBoards();
+        console.error("Failed to load roadmap:", err);
       });
   }
 
