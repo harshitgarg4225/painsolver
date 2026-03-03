@@ -14,7 +14,8 @@ const createCommentSchema = z.object({
   postID: z.string().min(1),
   authorID: z.string().min(1),
   value: z.string().min(1),
-  isPrivate: z.boolean().optional()
+  isPrivate: z.boolean().optional(),
+  images: z.array(z.string().url()).max(5).optional()
 });
 
 const deleteCommentSchema = z.object({
@@ -29,6 +30,7 @@ function formatComment(comment: {
   authorId: string;
   value: string;
   isPrivate: boolean;
+  images: string[];
   createdAt: Date;
   updatedAt: Date;
 } & Record<string, unknown>): Record<string, unknown> {
@@ -40,6 +42,7 @@ function formatComment(comment: {
     authorId: comment.authorId,
     value: comment.value,
     isPrivate: comment.isPrivate,
+    images: comment.images || [],
     createdAt: comment.createdAt,
     updatedAt: comment.updatedAt,
     author: comment.author
@@ -94,7 +97,8 @@ commentsRoutes.post("/create", requireApiKey, async (req, res) => {
         postId: parsed.data.postID,
         authorId: parsed.data.authorID,
         value: parsed.data.value,
-        isPrivate: parsed.data.isPrivate ?? false
+        isPrivate: parsed.data.isPrivate ?? false,
+        images: parsed.data.images ?? []
       }
     });
 

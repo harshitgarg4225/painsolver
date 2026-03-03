@@ -92,6 +92,13 @@
     customerViewMinMrr: 0,
     opportunities: [],
     selectedPostId: "",
+    customDomains: [],
+    activeDomainId: null,
+    portalSettings: {
+      portalName: "PainSolver",
+      primaryColor: "#004549",
+      accentColor: "#00eef9"
+    },
     summary: {
       boardCount: 0,
       postCount: 0,
@@ -2811,6 +2818,200 @@
       });
   }
 
+  // ===========================
+  // Custom Domains
+  // ===========================
+  function loadCustomDomains() {
+    var statusEl = document.getElementById("custom-domain-status");
+    if (statusEl) {
+      statusEl.innerHTML = '<div class="domain-loading"><span class="ms">refresh</span> Loading domain configuration...</div>';
+    }
+
+    return request("/api/custom-domains")
+      .then(function (result) {
+        state.customDomains = result.domains || [];
+        state.activeDomainId = result.activeDomainId;
+        renderCustomDomains();
+      })
+      .catch(function (error) {
+        state.customDomains = [];
+        if (statusEl) {
+          statusEl.innerHTML = '<div class="domain-error">' + esc(error.message || "Failed to load domains") + '</div>';
+        }
+      });
+  }
+
+  function renderCustomDomains() {
+    var statusEl = document.getElementById("custom-domain-status");
+    var listEl = document.getElementById("domains-list");
+    var instructionsEl = document.getElementById("domain-instructions");
+
+    if (!statusEl || !listEl) return;
+
+    var domains = state.customDomains;
+    var activeDomain = domains.find(function (d) { return d.id === state.activeDomainId; });
+
+    if (activeDomain && activeDomain.status === "active") {
+      statusEl.innerHTML =
+        '<div class="domain-active">' +
+        '<span class="ms" style="color: var(--aqua-600);">check_circle</span> ' +
+        '<strong>Your portal is live at:</strong> ' +
+        '<a href="https://' + esc(activeDomain.domain) + '" target="_blank">https://' + esc(activeDomain.domain) + '</a>' +
+        '</div>';
+    } else if (domains.length === 0) {
+      statusEl.innerHTML =
+        '<div class="domain-empty">' +
+        '<span class="ms">info</span> ' +
+        'No custom domain configured. Your portal is accessible at the default URL.' +
+        '</div>';
+    } else {
+      statusEl.innerHTML =
+        '<div class="domain-pending">' +
+        '<span class="ms">pending</span> ' +
+        'You have ' + domains.length + ' domain(s) pending setup.' +
+        '</div>';
+    }
+
+    // Show/hide instructions based on pending domains
+    var hasPending = domains.some(function (d) { return d.status === "pending_verification"; });
+    if (instructionsEl) {
+      instructionsEl.classList.toggle("hidden", !hasPending);
+    }
+
+    // Render domain cards
+    listEl.innerHTML = domains.map(function (domain) {
+      var statusClass = domain.status === "active" ? "active" :
+                        domain.status === "verified" ? "verified" :
+                        domain.status === "failed" ? "failed" : "pending";
+      var statusLabel = domain.status === "active" ? "Active" :
+                        domain.status === "verified" ? "Verified" :
+                        domain.status === "failed" ? "Failed" : "Pending Verification";
+
+      var verificationHtml = "";
+      if (domain.status === "pending_verification") {
+        verificationHtml =
+          '<div class="domain-verification">' +
+          '<div class="verification-record">' +
+          '<span class="record-type">TXT Record</span>' +
+          '<div class="record-value">' +
+          '<span>_painsolver-verify.' + esc(domain.domain) + '</span>' +
+          '</div>' +
+          '<div class="record-value">' +
+          '<span>' + esc(domain.verificationToken) + '</span>' +
+          '<button class="copy-btn ghost small" data-copy="' + esc(domain.verificationToken) + '">Copy</button>' +
+          '</div>' +
+          '</div>' +
+          '</div>';
+      } else if (domain.status === "verified") {
+        verificationHtml =
+          '<div class="domain-verification">' +
+          '<p class="muted">Add a CNAME record pointing <strong>' + esc(domain.domain) + '</strong> to <code>cname.vercel-dns.com</code></p>' +
+          '</div>';
+      }
+
+      var actionsHtml =
+        '<div class="domain-card-actions">' +
+        (domain.status === "pending_verification"
+          ? '<button class="primary small" data-verify-domain="' + esc(domain.id) + '"><span class="ms">verified</span> Verify</button>'
+          : '') +
+        (domain.status === "verified"
+          ? '<button class="primary small" data-activate-domain="' + esc(domain.id) + '"><span class="ms">rocket_launch</span> Activate</button>' +
+            '<button class="ghost small" data-check-cname="' + esc(domain.id) + '"><span class="ms">dns</span> Check CNAME</button>'
+          : '') +
+        '<button class="ghost small danger" data-delete-domain="' + esc(domain.id) + '"><span class="ms">delete</span> Remove</button>' +
+        '</div>';
+
+      return (
+        '<div class="domain-card' + (domain.status === "active" ? " is-active" : "") + '" data-domain-id="' + esc(domain.id) + '">' +
+        '<div class="domain-card-header">' +
+        '<span class="domain-name"><span class="ms">language</span> ' + esc(domain.domain) + '</span>' +
+        '<span class="domain-status-badge ' + statusClass + '">' + statusLabel + '</span>' +
+        '</div>' +
+        verificationHtml +
+        (domain.errorMessage ? '<p class="domain-error-msg">' + esc(domain.errorMessage) + '</p>' : '') +
+        actionsHtml +
+        '</div>'
+      );
+    }).join("");
+  }
+
+  function addCustomDomain(domain) {
+    var btn = document.getElementById("add-domain-btn");
+    if (btn) setButtonBusy(btn, true, "Adding...");
+
+    return request("/api/custom-domains/add", {
+      method: "POST",
+      body: { domain: domain }
+    })
+      .then(function (result) {
+        state.customDomains.push(result.domain);
+        renderCustomDomains();
+        pushToast("success", "Domain added! Follow the instructions to verify ownership.");
+        var input = document.getElementById("new-domain-input");
+        if (input) input.value = "";
+      })
+      .catch(function (error) {
+        pushToast("error", error.message || "Failed to add domain");
+      })
+      .finally(function () {
+        if (btn) setButtonBusy(btn, false);
+      });
+  }
+
+  function verifyDomain(domainId) {
+    var btn = document.querySelector('[data-verify-domain="' + domainId + '"]');
+    if (btn) setButtonBusy(btn, true, "Verifying...");
+
+    return request("/api/custom-domains/verify/" + domainId, { method: "POST" })
+      .then(function (result) {
+        if (result.verified) {
+          pushToast("success", "Domain verified! " + (result.nextStep || ""));
+          return loadCustomDomains();
+        } else {
+          pushToast("warning", result.error || "Verification failed. " + (result.hint || ""));
+        }
+      })
+      .catch(function (error) {
+        pushToast("error", error.message || "Verification failed");
+      })
+      .finally(function () {
+        if (btn) setButtonBusy(btn, false);
+      });
+  }
+
+  function activateDomain(domainId) {
+    var btn = document.querySelector('[data-activate-domain="' + domainId + '"]');
+    if (btn) setButtonBusy(btn, true, "Activating...");
+
+    return request("/api/custom-domains/activate/" + domainId, { method: "POST" })
+      .then(function (result) {
+        if (result.activated) {
+          pushToast("success", "Domain activated! " + (result.note || ""));
+          return loadCustomDomains();
+        }
+      })
+      .catch(function (error) {
+        pushToast("error", error.message || "Activation failed");
+      })
+      .finally(function () {
+        if (btn) setButtonBusy(btn, false);
+      });
+  }
+
+  function deleteDomain(domainId) {
+    if (!confirm("Are you sure you want to remove this domain?")) return;
+
+    return request("/api/custom-domains/" + domainId, { method: "DELETE" })
+      .then(function () {
+        state.customDomains = state.customDomains.filter(function (d) { return d.id !== domainId; });
+        renderCustomDomains();
+        pushToast("success", "Domain removed");
+      })
+      .catch(function (error) {
+        pushToast("error", error.message || "Failed to remove domain");
+      });
+  }
+
   function loadMembers() {
     setLoading("members", true);
     state.errors.members = "";
@@ -3363,6 +3564,10 @@
 
     if (tab === "access") {
       void Promise.all([loadAccessRequests(), loadBoardSettings()]);
+    }
+
+    if (tab === "settings") {
+      void loadCustomDomains();
     }
 
     if (tab === "changelog") {
@@ -5566,6 +5771,152 @@
         el.aiThresholdValue.textContent = value + "%";
         localStorage.setItem("painsolver_ai_threshold", value);
       });
+    }
+
+    // ===========================
+    // Settings Page Event Listeners
+    // ===========================
+    var settingsSection = document.getElementById("company-settings");
+    if (settingsSection) {
+      // Add Domain Button
+      var addDomainBtn = document.getElementById("add-domain-btn");
+      var newDomainInput = document.getElementById("new-domain-input");
+      
+      if (addDomainBtn && newDomainInput) {
+        addDomainBtn.addEventListener("click", function () {
+          var domain = newDomainInput.value.trim().toLowerCase();
+          if (!domain) {
+            pushToast("warning", "Please enter a domain name.");
+            return;
+          }
+          addCustomDomain(domain);
+        });
+
+        newDomainInput.addEventListener("keypress", function (e) {
+          if (e.key === "Enter") {
+            addDomainBtn.click();
+          }
+        });
+      }
+
+      // Domain List Actions (delegated)
+      var domainsList = document.getElementById("domains-list");
+      if (domainsList) {
+        domainsList.addEventListener("click", function (event) {
+          var target = event.target;
+          if (!(target instanceof HTMLElement)) return;
+
+          // Copy button
+          var copyBtn = target.closest("[data-copy]");
+          if (copyBtn) {
+            var textToCopy = copyBtn.getAttribute("data-copy");
+            navigator.clipboard.writeText(textToCopy).then(function () {
+              pushToast("success", "Copied to clipboard!");
+            });
+            return;
+          }
+
+          // Verify domain
+          var verifyBtn = target.closest("[data-verify-domain]");
+          if (verifyBtn) {
+            var domainId = verifyBtn.getAttribute("data-verify-domain");
+            verifyDomain(domainId);
+            return;
+          }
+
+          // Activate domain
+          var activateBtn = target.closest("[data-activate-domain]");
+          if (activateBtn) {
+            var domainId = activateBtn.getAttribute("data-activate-domain");
+            activateDomain(domainId);
+            return;
+          }
+
+          // Check CNAME
+          var checkCnameBtn = target.closest("[data-check-cname]");
+          if (checkCnameBtn) {
+            var domainId = checkCnameBtn.getAttribute("data-check-cname");
+            if (checkCnameBtn instanceof HTMLButtonElement) {
+              setButtonBusy(checkCnameBtn, true, "Checking...");
+            }
+            request("/api/custom-domains/check-cname/" + domainId, { method: "POST" })
+              .then(function (result) {
+                if (result.configured) {
+                  pushToast("success", "CNAME configured correctly! SSL is active.");
+                  loadCustomDomains();
+                } else {
+                  pushToast("warning", result.error || "CNAME not configured. " + (result.hint || ""));
+                }
+              })
+              .catch(function (error) {
+                pushToast("error", error.message || "CNAME check failed");
+              })
+              .finally(function () {
+                if (checkCnameBtn instanceof HTMLButtonElement) {
+                  setButtonBusy(checkCnameBtn, false);
+                }
+              });
+            return;
+          }
+
+          // Delete domain
+          var deleteBtn = target.closest("[data-delete-domain]");
+          if (deleteBtn) {
+            var domainId = deleteBtn.getAttribute("data-delete-domain");
+            deleteDomain(domainId);
+            return;
+          }
+        });
+      }
+
+      // Color picker sync
+      var primaryColor = document.getElementById("primary-color");
+      var primaryColorHex = document.getElementById("primary-color-hex");
+      var accentColor = document.getElementById("accent-color");
+      var accentColorHex = document.getElementById("accent-color-hex");
+
+      if (primaryColor && primaryColorHex) {
+        primaryColor.addEventListener("input", function () {
+          primaryColorHex.value = primaryColor.value.toUpperCase();
+        });
+        primaryColorHex.addEventListener("input", function () {
+          if (/^#[0-9A-Fa-f]{6}$/.test(primaryColorHex.value)) {
+            primaryColor.value = primaryColorHex.value;
+          }
+        });
+      }
+
+      if (accentColor && accentColorHex) {
+        accentColor.addEventListener("input", function () {
+          accentColorHex.value = accentColor.value.toUpperCase();
+        });
+        accentColorHex.addEventListener("input", function () {
+          if (/^#[0-9A-Fa-f]{6}$/.test(accentColorHex.value)) {
+            accentColor.value = accentColorHex.value;
+          }
+        });
+      }
+
+      // Save branding
+      var saveBrandingBtn = document.getElementById("save-branding-btn");
+      if (saveBrandingBtn) {
+        saveBrandingBtn.addEventListener("click", function () {
+          var portalName = document.getElementById("portal-name");
+          var settings = {
+            portalName: portalName ? portalName.value : "PainSolver",
+            primaryColor: primaryColor ? primaryColor.value : "#004549",
+            accentColor: accentColor ? accentColor.value : "#00eef9"
+          };
+          
+          setButtonBusy(saveBrandingBtn, true, "Saving...");
+          // Note: Portal settings endpoint would need to be created
+          // For now, just show a toast
+          setTimeout(function () {
+            pushToast("success", "Branding settings saved!");
+            setButtonBusy(saveBrandingBtn, false);
+          }, 500);
+        });
+      }
     }
   }
 

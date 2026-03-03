@@ -50,6 +50,10 @@
           <span class="ms">analytics</span>
           <span>Reporting</span>
         </button>
+        <button class="nav-item" data-tab="settings" type="button">
+          <span class="ms">settings</span>
+          <span>Settings</span>
+        </button>
       </nav>
 
       <div class="top-actions">
@@ -639,6 +643,100 @@
           </div>
           <p id="customer-view-summary" class="muted"></p>
           <div id="customer-view-list" class="request-list"></div>
+        </article>
+      </section>
+
+      <!-- Settings Tab -->
+      <section id="company-settings" class="company-page">
+        <header class="page-head">
+          <h1>Portal Settings</h1>
+          <p>Configure your customer portal, custom domains, and branding.</p>
+        </header>
+
+        <!-- Custom Domain Configuration -->
+        <article class="panel custom-domain-panel">
+          <h2><span class="ms">language</span> Custom Domain</h2>
+          <p class="muted">Use your own domain (e.g., feedback.yourcompany.com) for your customer portal.</p>
+          
+          <div id="custom-domain-status" class="domain-status">
+            <div class="domain-loading">Loading domain configuration...</div>
+          </div>
+
+          <div class="domain-add-form">
+            <div class="form-row">
+              <input type="text" id="new-domain-input" placeholder="feedback.yourcompany.com" />
+              <button id="add-domain-btn" class="primary" type="button">
+                <span class="ms">add</span> Add Domain
+              </button>
+            </div>
+          </div>
+
+          <div id="domain-instructions" class="domain-instructions hidden">
+            <h4>Setup Instructions</h4>
+            <ol class="setup-steps">
+              <li>Go to your DNS provider</li>
+              <li>Add a TXT record for verification</li>
+              <li>Click "Verify" to confirm ownership</li>
+              <li>Add a CNAME record pointing to <code>cname.vercel-dns.com</code></li>
+            </ol>
+          </div>
+
+          <div id="domains-list" class="domains-list"></div>
+        </article>
+
+        <!-- Portal Branding -->
+        <article class="panel branding-panel">
+          <h2><span class="ms">palette</span> Branding</h2>
+          <p class="muted">Customize the look and feel of your customer portal.</p>
+          
+          <div class="branding-form">
+            <div class="form-group">
+              <label for="portal-name">Portal Name</label>
+              <input type="text" id="portal-name" placeholder="Your Product Feedback" />
+            </div>
+            <div class="form-row colors-row">
+              <div class="form-group">
+                <label for="primary-color">Primary Color</label>
+                <div class="color-input-row">
+                  <input type="color" id="primary-color" value="#004549" />
+                  <input type="text" id="primary-color-hex" value="#004549" maxlength="7" />
+                </div>
+              </div>
+              <div class="form-group">
+                <label for="accent-color">Accent Color</label>
+                <div class="color-input-row">
+                  <input type="color" id="accent-color" value="#00eef9" />
+                  <input type="text" id="accent-color-hex" value="#00eef9" maxlength="7" />
+                </div>
+              </div>
+            </div>
+            <div class="form-actions">
+              <button id="save-branding-btn" class="primary" type="button">
+                <span class="ms">save</span> Save Branding
+              </button>
+            </div>
+          </div>
+        </article>
+
+        <!-- Upload Settings -->
+        <article class="panel upload-settings-panel">
+          <h2><span class="ms">cloud_upload</span> Upload Settings</h2>
+          <p class="muted">Configure image uploads for comments and posts.</p>
+          
+          <div class="upload-settings">
+            <div class="setting-row">
+              <span class="setting-label">Max image size</span>
+              <span class="setting-value" id="max-image-size">5 MB</span>
+            </div>
+            <div class="setting-row">
+              <span class="setting-label">Allowed formats</span>
+              <span class="setting-value" id="allowed-formats">JPEG, PNG, GIF, WebP</span>
+            </div>
+            <div class="setting-row">
+              <span class="setting-label">Max images per comment</span>
+              <span class="setting-value">5</span>
+            </div>
+          </div>
         </article>
       </section>
     </main>

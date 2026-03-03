@@ -1747,6 +1747,7 @@ export async function addCommentAsActor(input: {
   postId: string;
   body: string;
   replyToCommentId?: string;
+  images?: string[];
   actor: ActorContext | undefined;
   isPrivate?: boolean;
 }): Promise<{ comment: WorkspaceCommentView | null; access: WorkspaceBoardAccess | null }> {
@@ -1778,7 +1779,8 @@ export async function addCommentAsActor(input: {
         authorId: actorUser.id,
         value: input.body,
         isPrivate: input.isPrivate ?? false,
-        replyToCommentId: input.replyToCommentId ?? null
+        replyToCommentId: input.replyToCommentId ?? null,
+        images: input.images ?? []
       },
       include: {
         author: {

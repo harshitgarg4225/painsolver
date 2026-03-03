@@ -43,7 +43,8 @@ const voteSchema = z.object({
 const commentSchema = z.object({
   postId: z.string().min(1),
   body: z.string().min(1),
-  replyToCommentId: z.string().min(1).optional()
+  replyToCommentId: z.string().min(1).optional(),
+  images: z.array(z.string().url()).max(5).optional()
 });
 
 const accessRequestSchema = z.object({
@@ -326,6 +327,7 @@ portalRoutes.post("/comments", requireAuthenticatedActor, async (req, res) => {
     postId: parsed.data.postId,
     body: parsed.data.body,
     replyToCommentId: parsed.data.replyToCommentId,
+    images: parsed.data.images,
     actor: req.actor,
     isPrivate: false
   });

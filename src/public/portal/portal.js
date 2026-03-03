@@ -26,6 +26,7 @@
     })(),
     expandedPostId: "",
     replyTargets: {},
+    commentImages: {}, // { postId: [{ url: "...", file: File }] }
     feedbackError: "",
     roadmapError: "",
     notificationError: "",
@@ -716,6 +717,15 @@
                   ? '<p class="thread-reply-to">Replying to ' + esc(comment.replyToAuthorName) + "</p>"
                   : "";
 
+                var imagesHtml = "";
+                if (comment.images && comment.images.length > 0) {
+                  imagesHtml = '<div class="comment-images">' +
+                    comment.images.map(function (imgUrl) {
+                      return '<img src="' + esc(imgUrl) + '" alt="Comment image" class="comment-image" data-lightbox="' + esc(imgUrl) + '" />';
+                    }).join("") +
+                    '</div>';
+                }
+
                 return (
                   '<article class="thread-comment">' +
                   '<div class="thread-head">' +
@@ -730,6 +740,7 @@
                   "<p>" +
                   esc(comment.body || "") +
                   "</p>" +
+                  imagesHtml +
                   (state.isLoggedIn && access.canPost
                     ? '<button class="ghost small thread-reply-btn" data-reply-post-id="' +
                       esc(post.id) +
@@ -764,9 +775,16 @@
             '" rows="2" placeholder="' +
             esc(replyTarget ? "Write your reply..." : "Add your comment...") +
             '"></textarea>' +
+            '<div class="comment-images-preview" data-images-preview="' + esc(post.id) + '"></div>' +
+            '<div class="thread-actions">' +
+            '<label class="image-upload-btn ghost small" title="Attach image">' +
+            '<span class="ms">image</span>' +
+            '<input type="file" accept="image/*" data-image-upload="' + esc(post.id) + '" hidden multiple />' +
+            '</label>' +
             '<button class="primary thread-submit" data-comment-post-id="' +
             esc(post.id) +
             '" type="button">Comment</button>' +
+            '</div>' +
             "</div>"
           : '<p class="feedback-empty-comments">' + esc(state.isLoggedIn ? "You need board write access to comment." : "Log in to comment.") + "</p>";
 
@@ -1656,16 +1674,24 @@
         }
 
         setButtonBusy(commentBtn, true, "Posting...");
+        
+        // Get uploaded image URLs
+        var images = (state.commentImages[commentPostId] || []).map(function (img) {
+          return img.url;
+        });
+
         request("/api/portal/comments", {
           method: "POST",
           body: {
             postId: commentPostId,
             body: body,
+            images: images,
             replyToCommentId: state.replyTargets[commentPostId] ? state.replyTargets[commentPostId].commentId : undefined
           }
         })
           .then(function () {
             delete state.replyTargets[commentPostId];
+            delete state.commentImages[commentPostId];
             state.expandedPostId = commentPostId;
             return Promise.all([loadFeedback(), loadNotifications()]);
           })
@@ -1703,6 +1729,129 @@
       event.preventDefault();
       toggleExpand(target.getAttribute("data-expand-id"));
     });
+
+    // Image upload handler
+    el.feedbackList.addEventListener("change", function (event) {
+      var target = event.target;
+      if (!(target instanceof HTMLInputElement) || !target.hasAttribute("data-image-upload")) {
+        return;
+      }
+
+      var postId = target.getAttribute("data-image-upload");
+      var files = target.files;
+      if (!files || files.length === 0 || !postId) {
+        return;
+      }
+
+      // Initialize images array for this post
+      if (!state.commentImages[postId]) {
+        state.commentImages[postId] = [];
+      }
+
+      // Check max images (5)
+      if (state.commentImages[postId].length + files.length > 5) {
+        pushToast("warning", "Maximum 5 images allowed per comment.");
+        return;
+      }
+
+      // Upload each file
+      Array.from(files).forEach(function (file) {
+        if (file.size > 5 * 1024 * 1024) {
+          pushToast("error", "Image too large. Maximum size is 5MB.");
+          return;
+        }
+
+        if (!file.type.startsWith("image/")) {
+          pushToast("error", "Only image files are allowed.");
+          return;
+        }
+
+        // Create preview immediately
+        var previewUrl = URL.createObjectURL(file);
+        var imgEntry = { url: null, previewUrl: previewUrl, file: file, uploading: true };
+        state.commentImages[postId].push(imgEntry);
+        renderImagePreview(postId);
+
+        // Upload the file
+        var reader = new FileReader();
+        reader.onload = function () {
+          var arrayBuffer = reader.result;
+          
+          fetch("/api/uploads/image", {
+            method: "POST",
+            headers: {
+              "Content-Type": file.type
+            },
+            body: arrayBuffer
+          })
+            .then(function (response) {
+              if (!response.ok) {
+                throw new Error("Upload failed");
+              }
+              return response.json();
+            })
+            .then(function (result) {
+              imgEntry.url = result.url;
+              imgEntry.uploading = false;
+              renderImagePreview(postId);
+            })
+            .catch(function (error) {
+              pushToast("error", error.message || "Failed to upload image.");
+              // Remove failed upload
+              var idx = state.commentImages[postId].indexOf(imgEntry);
+              if (idx > -1) {
+                state.commentImages[postId].splice(idx, 1);
+              }
+              renderImagePreview(postId);
+            });
+        };
+        reader.readAsArrayBuffer(file);
+      });
+
+      // Clear the input
+      target.value = "";
+    });
+
+    // Image remove handler
+    el.feedbackList.addEventListener("click", function (event) {
+      var target = event.target;
+      if (!(target instanceof HTMLElement)) return;
+      
+      var removeBtn = target.closest("[data-remove-image]");
+      if (removeBtn) {
+        var postId = removeBtn.getAttribute("data-remove-image-post");
+        var imgUrl = removeBtn.getAttribute("data-remove-image");
+        if (postId && state.commentImages[postId]) {
+          state.commentImages[postId] = state.commentImages[postId].filter(function (img) {
+            return img.previewUrl !== imgUrl && img.url !== imgUrl;
+          });
+          renderImagePreview(postId);
+        }
+      }
+    });
+
+    function renderImagePreview(postId) {
+      var previewEl = document.querySelector('[data-images-preview="' + postId + '"]');
+      if (!previewEl) return;
+
+      var images = state.commentImages[postId] || [];
+      if (images.length === 0) {
+        previewEl.innerHTML = "";
+        return;
+      }
+
+      previewEl.innerHTML = images.map(function (img) {
+        var displayUrl = img.previewUrl || img.url;
+        return (
+          '<div class="image-preview-item' + (img.uploading ? " is-uploading" : "") + '">' +
+          '<img src="' + esc(displayUrl) + '" alt="Preview" />' +
+          (img.uploading
+            ? '<div class="upload-spinner"></div>'
+            : '<button type="button" class="remove-image-btn" data-remove-image-post="' + esc(postId) + '" data-remove-image="' + esc(displayUrl) + '">&times;</button>') +
+          '</div>'
+        );
+      }).join("");
+    }
 
     // Roadmap item click handlers - open the post in feedback view
     function handleRoadmapClick(event) {
@@ -1893,6 +2042,32 @@
             setButtonBusy(readButton, false);
           }
         });
+    });
+
+    // Image lightbox
+    document.body.addEventListener("click", function (event) {
+      var target = event.target;
+      if (!(target instanceof HTMLElement)) return;
+
+      // Open lightbox
+      var lightboxImg = target.closest("[data-lightbox]");
+      if (lightboxImg) {
+        var imgUrl = lightboxImg.getAttribute("data-lightbox");
+        var lightbox = document.createElement("div");
+        lightbox.className = "image-lightbox";
+        lightbox.innerHTML = '<img src="' + esc(imgUrl) + '" alt="Full size image" />';
+        document.body.appendChild(lightbox);
+        
+        lightbox.addEventListener("click", function () {
+          lightbox.remove();
+        });
+        return;
+      }
+
+      // Close lightbox on click
+      if (target.classList.contains("image-lightbox")) {
+        target.remove();
+      }
     });
   }
 

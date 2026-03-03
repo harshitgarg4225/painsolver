@@ -233,6 +233,7 @@ model Comment {
   value            String    @db.Text
   isPrivate        Boolean   @default(false)
   replyToCommentId String?
+  images           String[]  @default([])  // Array of image URLs
   post             Post      @relation(fields: [postId], references: [id], onDelete: Cascade)
   author           User      @relation("CommentAuthor", fields: [authorId], references: [id], onDelete: Restrict)
   replyToComment   Comment?  @relation("CommentReplies", fields: [replyToCommentId], references: [id], onDelete: SetNull)
@@ -392,4 +393,58 @@ model SlackConnection {
   user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([slackTeamId])
+}
+
+enum CustomDomainStatus {
+  pending_verification
+  verified
+  failed
+  active
+}
+
+model CustomDomain {
+  id                 String             @id @default(cuid())
+  domain             String             @unique
+  status             CustomDomainStatus @default(pending_verification)
+  verificationToken  String             @unique @default(cuid())
+  verificationMethod String             @default("dns_txt")  // dns_txt, dns_cname
+  sslStatus          String             @default("pending")  // pending, provisioning, active, failed
+  verifiedAt         DateTime?
+  lastCheckedAt      DateTime?
+  errorMessage       String?
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+
+  @@index([status])
+}
+
+model PortalSettings {
+  id                  String   @id @default(cuid())
+  portalName          String   @default("PainSolver")
+  portalLogo          String?
+  primaryColor        String   @default("#004549")
+  accentColor         String   @default("#00eef9")
+  customCss           String?  @db.Text
+  customDomainId      String?  @unique
+  allowPublicSignup   Boolean  @default(true)
+  requireEmailVerify  Boolean  @default(false)
+  maxImageSizeMb      Int      @default(5)
+  allowedImageTypes   String[] @default(["image/jpeg", "image/png", "image/gif", "image/webp"])
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+}
+
+model UploadedFile {
+  id          String   @id @default(cuid())
+  filename    String
+  originalName String
+  mimeType    String
+  sizeBytes   Int
+  url         String
+  uploadedBy  String?  // userId if authenticated
+  purpose     String   @default("comment")  // comment, changelog, avatar
+  createdAt   DateTime @default(now())
+
+  @@index([uploadedBy])
+  @@index([purpose])
 }
