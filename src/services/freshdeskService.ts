@@ -1,26 +1,53 @@
 import { env } from "../config/env";
 import { stripHtml } from "../lib/text";
 
+// Rate limiting: max 50 requests per minute for Freshdesk
+let lastRequestTime = 0;
+const MIN_REQUEST_INTERVAL_MS = 1200; // ~50 req/min
+
+async function rateLimit(): Promise<void> {
+  const now = Date.now();
+  const elapsed = now - lastRequestTime;
+  if (elapsed < MIN_REQUEST_INTERVAL_MS) {
+    await new Promise((resolve) => setTimeout(resolve, MIN_REQUEST_INTERVAL_MS - elapsed));
+  }
+  lastRequestTime = Date.now();
+}
+
+// Retry logic for transient failures
+async function withRetry<T>(
+  fn: () => Promise<T>,
+  maxRetries: number = 3,
+  delayMs: number = 1000
+): Promise<T> {
+  let lastError: Error | null = null;
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+      const isRetryable = 
+        lastError.message.includes("429") || // Rate limit
+        lastError.message.includes("503") || // Service unavailable
+        lastError.message.includes("ETIMEDOUT") ||
+        lastError.message.includes("ECONNRESET");
+      
+      if (!isRetryable || attempt === maxRetries) {
+        throw lastError;
+      }
+      
+      console.warn(`[Freshdesk] Attempt ${attempt} failed, retrying in ${delayMs}ms:`, lastError.message);
+      await new Promise((resolve) => setTimeout(resolve, delayMs * attempt));
+    }
+  }
+  throw lastError;
+}
+
 interface FreshdeskTicketFieldApi {
   name?: string;
   label?: string;
   type?: string;
   choices?: Record<string, string> | string[];
-}
-
-interface FreshdeskTicketApi {
-  id?: number | string;
-  subject?: string;
-  description?: string;
-  description_text?: string;
-  email?: string;
-  requester_email?: string;
-  requester?: {
-    email?: string;
-    name?: string;
-  };
-  custom_fields?: Record<string, unknown>;
-  [key: string]: unknown;
 }
 
 export interface FreshdeskTicketFieldOption {
@@ -267,26 +294,33 @@ async function fetchFreshdeskJson<T>(input: {
   apiKey: string;
   path: string;
   query?: Record<string, string>;
+  method?: "GET" | "POST" | "PUT";
+  body?: Record<string, unknown>;
 }): Promise<T> {
-  const url = new URL(`${normalizeFreshdeskDomain(input.domain)}${input.path}`);
-  Object.entries(input.query ?? {}).forEach(([key, value]) => {
-    url.searchParams.set(key, value);
-  });
+  return withRetry(async () => {
+    await rateLimit();
+    
+    const url = new URL(`${normalizeFreshdeskDomain(input.domain)}${input.path}`);
+    Object.entries(input.query ?? {}).forEach(([key, value]) => {
+      url.searchParams.set(key, value);
+    });
 
-  const response = await fetch(url.toString(), {
-    method: "GET",
-    headers: {
-      Authorization: authHeader(input.apiKey),
-      "Content-Type": "application/json"
+    const response = await fetch(url.toString(), {
+      method: input.method || "GET",
+      headers: {
+        Authorization: authHeader(input.apiKey),
+        "Content-Type": "application/json"
+      },
+      body: input.body ? JSON.stringify(input.body) : undefined
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Freshdesk API failed (${response.status}): ${errorText}`);
     }
+
+    return (await response.json()) as T;
   });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Freshdesk API failed (${response.status}): ${errorText}`);
-  }
-
-  return (await response.json()) as T;
 }
 
 export async function listFreshdeskTicketFields(input: {
@@ -623,4 +657,156 @@ export function mapPainSolverStatusToFreshdesk(status: string): number | null {
     shipped: 5       // Closed
   };
   return mapping[status] ?? null;
+}
+
+/**
+ * Map Freshdesk priority to PainSolver urgency
+ * Freshdesk priorities: 1=Low, 2=Medium, 3=High, 4=Urgent
+ */
+export function mapFreshdeskPriorityToUrgency(priority: number | string | undefined): "low" | "medium" | "high" | "critical" {
+  const numPriority = Number(priority);
+  if (numPriority === 4) return "critical";
+  if (numPriority === 3) return "high";
+  if (numPriority === 2) return "medium";
+  return "low";
+}
+
+/**
+ * Extract enriched metadata from Freshdesk ticket
+ */
+export function extractFreshdeskMetadata(ticket: Record<string, unknown>): {
+  priority: "low" | "medium" | "high" | "critical";
+  status: string;
+  source: string;
+  tags: string[];
+  customFields: Record<string, unknown>;
+} {
+  const priorityNum = Number(ticket.priority ?? ticket.ticket_priority ?? 2);
+  const statusNum = Number(ticket.status ?? ticket.ticket_status ?? 2);
+  const sourceNum = Number(ticket.source ?? ticket.ticket_source ?? 2);
+  
+  const statusMap: Record<number, string> = {
+    2: "open",
+    3: "pending",
+    4: "resolved",
+    5: "closed"
+  };
+  
+  const sourceMap: Record<number, string> = {
+    1: "email",
+    2: "portal",
+    3: "phone",
+    7: "chat",
+    9: "feedback_widget",
+    10: "outbound_email"
+  };
+
+  // Extract tags from ticket
+  const rawTags = ticket.tags ?? ticket.ticket_tags ?? [];
+  const tags = Array.isArray(rawTags) 
+    ? rawTags.map(t => String(t).toLowerCase()) 
+    : [];
+
+  // Extract custom fields
+  const customFields: Record<string, unknown> = {};
+  Object.entries(ticket).forEach(([key, value]) => {
+    if (key.startsWith("cf_") || key.startsWith("custom_fields.") || key.startsWith("ticket_cf_")) {
+      const cleanKey = key.replace(/^(ticket_)?custom_fields\./, "").replace(/^ticket_/, "");
+      customFields[cleanKey] = value;
+    }
+  });
+
+  return {
+    priority: mapFreshdeskPriorityToUrgency(priorityNum),
+    status: statusMap[statusNum] ?? "open",
+    source: sourceMap[sourceNum] ?? "unknown",
+    tags,
+    customFields
+  };
+}
+
+/**
+ * Get ticket statistics for activity display
+ */
+export async function getFreshdeskTicketStats(input: {
+  domain: string;
+  apiKey: string;
+}): Promise<{
+  totalTickets: number;
+  openTickets: number;
+  pendingTickets: number;
+  recentlyUpdated: number;
+}> {
+  if (env.USE_MOCK_FRESHDESK) {
+    return {
+      totalTickets: 42,
+      openTickets: 15,
+      pendingTickets: 8,
+      recentlyUpdated: 5
+    };
+  }
+
+  try {
+    // Get counts for different statuses
+    const [openTickets, pendingTickets] = await Promise.all([
+      fetchFreshdeskJson<{ total: number }>({
+        domain: input.domain,
+        apiKey: input.apiKey,
+        path: "/api/v2/search/tickets",
+        query: { query: '"status:2"' } // Open
+      }).then(r => r.total).catch(() => 0),
+      fetchFreshdeskJson<{ total: number }>({
+        domain: input.domain,
+        apiKey: input.apiKey,
+        path: "/api/v2/search/tickets",
+        query: { query: '"status:3"' } // Pending
+      }).then(r => r.total).catch(() => 0)
+    ]);
+
+    // Get recently updated tickets (last 24h)
+    const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    const recentlyUpdated = await fetchFreshdeskJson<FreshdeskTicketApi[]>({
+      domain: input.domain,
+      apiKey: input.apiKey,
+      path: "/api/v2/tickets",
+      query: {
+        updated_since: yesterday,
+        per_page: "1"
+      }
+    }).then(r => r.length).catch(() => 0);
+
+    return {
+      totalTickets: openTickets + pendingTickets,
+      openTickets,
+      pendingTickets,
+      recentlyUpdated
+    };
+  } catch (error) {
+    console.error("Failed to get Freshdesk stats:", error);
+    return {
+      totalTickets: 0,
+      openTickets: 0,
+      pendingTickets: 0,
+      recentlyUpdated: 0
+    };
+  }
+}
+
+interface FreshdeskTicketApi {
+  id?: number | string;
+  subject?: string;
+  description?: string;
+  description_text?: string;
+  email?: string;
+  requester_email?: string;
+  priority?: number;
+  status?: number;
+  source?: number;
+  tags?: string[];
+  requester?: {
+    email?: string;
+    name?: string;
+  };
+  custom_fields?: Record<string, unknown>;
+  [key: string]: unknown;
 }

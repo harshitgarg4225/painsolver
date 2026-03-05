@@ -53,6 +53,14 @@
       roadmap: false,
       changelog: false,
       notifications: false
+    },
+    // White-label settings
+    portalSettings: {
+      portalName: "Feedback Portal",
+      portalLogo: null,
+      primaryColor: "#004549",
+      accentColor: "#00eef9",
+      customCss: null
     }
   };
 
@@ -1065,6 +1073,80 @@
         updateAccessUi();
         renderNotificationPreferences();
       });
+  }
+
+  function loadPortalSettings() {
+    return request("/api/portal/settings")
+      .then(function (result) {
+        if (result.settings) {
+          state.portalSettings = result.settings;
+          applyPortalBranding();
+        }
+      })
+      .catch(function (err) {
+        console.warn("Failed to load portal settings:", err);
+      });
+  }
+
+  function applyPortalBranding() {
+    var settings = state.portalSettings;
+    
+    // Update CSS variables for colors
+    var root = document.documentElement;
+    if (settings.primaryColor) {
+      root.style.setProperty("--primary", settings.primaryColor);
+      root.style.setProperty("--primary-dark", adjustColor(settings.primaryColor, -20));
+      root.style.setProperty("--primary-light", adjustColor(settings.primaryColor, 40));
+    }
+    if (settings.accentColor) {
+      root.style.setProperty("--accent", settings.accentColor);
+    }
+    
+    // Update portal name in header
+    var portalTitle = document.querySelector(".portal-header h1, .brand-title");
+    if (portalTitle && settings.portalName) {
+      portalTitle.textContent = settings.portalName;
+    }
+    
+    // Update logo if provided
+    var logoEl = document.querySelector(".portal-logo, .brand-logo");
+    if (logoEl && settings.portalLogo) {
+      if (logoEl.tagName === "IMG") {
+        logoEl.src = settings.portalLogo;
+        logoEl.style.display = "block";
+      } else {
+        // Replace with img element
+        var img = document.createElement("img");
+        img.src = settings.portalLogo;
+        img.alt = settings.portalName || "Logo";
+        img.className = "portal-logo";
+        img.style.maxHeight = "40px";
+        img.style.width = "auto";
+        logoEl.parentNode.replaceChild(img, logoEl);
+      }
+    }
+    
+    // Inject custom CSS if provided
+    if (settings.customCss) {
+      var existingStyle = document.getElementById("portal-custom-css");
+      if (existingStyle) {
+        existingStyle.textContent = settings.customCss;
+      } else {
+        var style = document.createElement("style");
+        style.id = "portal-custom-css";
+        style.textContent = settings.customCss;
+        document.head.appendChild(style);
+      }
+    }
+  }
+
+  function adjustColor(hex, amount) {
+    // Lighten or darken a hex color
+    var num = parseInt(hex.replace("#", ""), 16);
+    var r = Math.min(255, Math.max(0, (num >> 16) + amount));
+    var g = Math.min(255, Math.max(0, ((num >> 8) & 0x00ff) + amount));
+    var b = Math.min(255, Math.max(0, (num & 0x0000ff) + amount));
+    return "#" + (0x1000000 + (r << 16) + (g << 8) + b).toString(16).slice(1);
   }
 
   function loadBoards() {
@@ -2080,7 +2162,11 @@
     renderFeedback();
     renderNotifications();
 
-    Promise.all([loadSession(), loadBoards()])
+    // Load portal branding first, then session and boards
+    loadPortalSettings()
+      .then(function () {
+        return Promise.all([loadSession(), loadBoards()]);
+      })
       .then(function () {
         return Promise.all([loadFeedback(), loadRoadmap(), loadChangelog(), loadNotificationPreferences(), loadNotifications()]);
       })

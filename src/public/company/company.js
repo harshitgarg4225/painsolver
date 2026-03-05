@@ -3578,6 +3578,7 @@
 
     if (tab === "settings") {
       void loadCustomDomains();
+      void loadPortalBranding();
     }
 
     if (tab === "changelog") {
@@ -5911,22 +5912,73 @@
       var saveBrandingBtn = document.getElementById("save-branding-btn");
       if (saveBrandingBtn) {
         saveBrandingBtn.addEventListener("click", function () {
-          var portalName = document.getElementById("portal-name");
+          var portalNameEl = document.getElementById("portal-name");
           var settings = {
-            portalName: portalName ? portalName.value : "PainSolver",
+            portalName: portalNameEl ? portalNameEl.value : "Feedback Portal",
             primaryColor: primaryColor ? primaryColor.value : "#004549",
             accentColor: accentColor ? accentColor.value : "#00eef9"
           };
           
           setButtonBusy(saveBrandingBtn, true, "Saving...");
-          // Note: Portal settings endpoint would need to be created
-          // For now, just show a toast
-          setTimeout(function () {
-            pushToast("success", "Branding settings saved!");
-            setButtonBusy(saveBrandingBtn, false);
-          }, 500);
+          
+          request("/api/portal/settings", {
+            method: "PATCH",
+            body: settings
+          })
+            .then(function (result) {
+              if (result.settings) {
+                state.portalSettings = result.settings;
+                pushToast("success", "Branding settings saved!");
+              }
+            })
+            .catch(function (error) {
+              pushToast("error", error.message || "Failed to save branding");
+            })
+            .finally(function () {
+              setButtonBusy(saveBrandingBtn, false);
+            });
         });
       }
+    }
+  }
+
+  function loadPortalBranding() {
+    return request("/api/portal/settings")
+      .then(function (result) {
+        if (result.settings) {
+          state.portalSettings = result.settings;
+          renderPortalBranding();
+        }
+      })
+      .catch(function (error) {
+        console.warn("Failed to load portal settings:", error);
+      });
+  }
+
+  function renderPortalBranding() {
+    var settings = state.portalSettings;
+    if (!settings) return;
+
+    var portalNameEl = document.getElementById("portal-name");
+    var primaryColorEl = document.getElementById("primary-color");
+    var primaryColorHexEl = document.getElementById("primary-color-hex");
+    var accentColorEl = document.getElementById("accent-color");
+    var accentColorHexEl = document.getElementById("accent-color-hex");
+
+    if (portalNameEl && settings.portalName) {
+      portalNameEl.value = settings.portalName;
+    }
+    if (primaryColorEl && settings.primaryColor) {
+      primaryColorEl.value = settings.primaryColor;
+    }
+    if (primaryColorHexEl && settings.primaryColor) {
+      primaryColorHexEl.value = settings.primaryColor;
+    }
+    if (accentColorEl && settings.accentColor) {
+      accentColorEl.value = settings.accentColor;
+    }
+    if (accentColorHexEl && settings.accentColor) {
+      accentColorHexEl.value = settings.accentColor;
     }
   }
 

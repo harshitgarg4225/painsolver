@@ -590,3 +590,130 @@ portalRoutes.get("/users/:userId/comments", async (req, res) => {
   res.status(200).json({ comments: userComments });
 });
 
+// =============================================
+// White-Label Portal Settings
+// =============================================
+
+const portalSettingsUpdateSchema = z.object({
+  portalName: z.string().min(1).max(100).optional(),
+  portalLogo: z.string().url().optional().nullable(),
+  primaryColor: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
+  accentColor: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
+  customCss: z.string().max(50000).optional().nullable(),
+  allowPublicSignup: z.boolean().optional(),
+  requireEmailVerify: z.boolean().optional()
+});
+
+// Get portal settings (public - for portal theming)
+portalRoutes.get("/settings", async (req, res) => {
+  const companyId = req.tenant?.companyId;
+  
+  if (!companyId) {
+    // Return default settings if no company context
+    res.status(200).json({
+      settings: {
+        portalName: "Feedback Portal",
+        portalLogo: null,
+        primaryColor: "#004549",
+        accentColor: "#00eef9",
+        customCss: null,
+        allowPublicSignup: true
+      }
+    });
+    return;
+  }
+
+  const settings = await prisma.portalSettings.findUnique({
+    where: { companyId }
+  });
+
+  if (!settings) {
+    // Create default settings if none exist
+    const newSettings = await prisma.portalSettings.create({
+      data: {
+        companyId,
+        portalName: "Feedback Portal"
+      }
+    });
+    
+    res.status(200).json({
+      settings: {
+        portalName: newSettings.portalName,
+        portalLogo: newSettings.portalLogo,
+        primaryColor: newSettings.primaryColor,
+        accentColor: newSettings.accentColor,
+        customCss: newSettings.customCss,
+        allowPublicSignup: newSettings.allowPublicSignup
+      }
+    });
+    return;
+  }
+
+  res.status(200).json({
+    settings: {
+      portalName: settings.portalName,
+      portalLogo: settings.portalLogo,
+      primaryColor: settings.primaryColor,
+      accentColor: settings.accentColor,
+      customCss: settings.customCss,
+      allowPublicSignup: settings.allowPublicSignup
+    }
+  });
+});
+
+// Update portal settings (requires auth)
+portalRoutes.patch("/settings", requireAuthenticatedActor, async (req, res) => {
+  const companyId = req.tenant?.companyId;
+  
+  if (!companyId) {
+    res.status(400).json({ error: "Company context required" });
+    return;
+  }
+
+  // Check if user is admin/owner
+  if (req.actor?.role !== "admin" && req.actor?.role !== "member") {
+    res.status(403).json({ error: "Admin access required" });
+    return;
+  }
+
+  const parsed = portalSettingsUpdateSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Invalid settings", details: parsed.error.flatten() });
+    return;
+  }
+
+  const settings = await prisma.portalSettings.upsert({
+    where: { companyId },
+    update: {
+      ...(parsed.data.portalName !== undefined && { portalName: parsed.data.portalName }),
+      ...(parsed.data.portalLogo !== undefined && { portalLogo: parsed.data.portalLogo }),
+      ...(parsed.data.primaryColor !== undefined && { primaryColor: parsed.data.primaryColor }),
+      ...(parsed.data.accentColor !== undefined && { accentColor: parsed.data.accentColor }),
+      ...(parsed.data.customCss !== undefined && { customCss: parsed.data.customCss }),
+      ...(parsed.data.allowPublicSignup !== undefined && { allowPublicSignup: parsed.data.allowPublicSignup }),
+      ...(parsed.data.requireEmailVerify !== undefined && { requireEmailVerify: parsed.data.requireEmailVerify })
+    },
+    create: {
+      companyId,
+      portalName: parsed.data.portalName ?? "Feedback Portal",
+      portalLogo: parsed.data.portalLogo,
+      primaryColor: parsed.data.primaryColor ?? "#004549",
+      accentColor: parsed.data.accentColor ?? "#00eef9",
+      customCss: parsed.data.customCss,
+      allowPublicSignup: parsed.data.allowPublicSignup ?? true,
+      requireEmailVerify: parsed.data.requireEmailVerify ?? false
+    }
+  });
+
+  res.status(200).json({
+    settings: {
+      portalName: settings.portalName,
+      portalLogo: settings.portalLogo,
+      primaryColor: settings.primaryColor,
+      accentColor: settings.accentColor,
+      customCss: settings.customCss,
+      allowPublicSignup: settings.allowPublicSignup
+    }
+  });
+});
+

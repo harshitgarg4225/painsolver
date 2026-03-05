@@ -50,6 +50,10 @@
           <a href="#mrr-data">MRR & Revenue Data</a>
           <a href="#integrations">Integrations</a>
           <a href="#custom-domains">Custom Domains</a>
+          <a href="#white-label">White-Label Branding</a>
+          <a href="#multi-tenancy">Multi-Tenancy API</a>
+          <a href="#company-api">Company API</a>
+          <a href="#ai-inbox-api">AI Inbox API</a>
           <a href="#api-map">API Mapping</a>
         </nav>
       </aside>
@@ -641,20 +645,399 @@ Authorization: Bearer &lt;API_KEY&gt;
           <p>
             Custom domain support allows you to host PainSolver on your own subdomain (e.g., <code>feedback.yourcompany.com</code>).
           </p>
-          <h3>Current Status</h3>
+          <h3>Setup Steps</h3>
+          <ol>
+            <li>Go to <strong>Company Dashboard → Settings → Custom Domains</strong></li>
+            <li>Click "Add Domain" and enter your subdomain (e.g., <code>feedback.yourcompany.com</code>)</li>
+            <li>Add the DNS TXT record shown for verification</li>
+            <li>Add a CNAME record pointing to <code>cname.vercel-dns.com</code></li>
+            <li>Click "Verify" once DNS propagates (usually 5-15 minutes)</li>
+            <li>SSL certificate will be automatically provisioned</li>
+          </ol>
+          <h3>API Endpoints</h3>
+          <pre><button class="copy-btn" type="button">Copy</button><code># List custom domains
+GET /api/custom-domains
+Authorization: Bearer &lt;API_KEY&gt;
+
+# Add a custom domain
+POST /api/custom-domains
+Authorization: Bearer &lt;API_KEY&gt;
+{
+  "domain": "feedback.yourcompany.com"
+}
+
+# Verify domain DNS
+POST /api/custom-domains/:id/verify
+
+# Activate domain (after verification)
+POST /api/custom-domains/:id/activate
+
+# Delete domain
+DELETE /api/custom-domains/:id</code></pre>
+          <h3>DNS Configuration</h3>
+          <table>
+            <thead>
+              <tr>
+                <th>Record Type</th>
+                <th>Host</th>
+                <th>Value</th>
+                <th>Purpose</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>TXT</td>
+                <td>_painsolver-verify.feedback</td>
+                <td><code>&lt;verification-token&gt;</code></td>
+                <td>Domain ownership verification</td>
+              </tr>
+              <tr>
+                <td>CNAME</td>
+                <td>feedback</td>
+                <td>cname.vercel-dns.com</td>
+                <td>Route traffic to PainSolver</td>
+              </tr>
+            </tbody>
+          </table>
+        </section>
+
+        <section id="white-label" data-title="White-Label Branding">
+          <h2>White-Label Branding</h2>
           <p>
-            <strong>Custom domains are not yet supported.</strong> All PainSolver instances currently run on <code>painsolver.vercel.app</code>.
+            Customize your feedback portal with your company's branding, colors, and styling.
           </p>
-          <h3>Planned Features</h3>
+          <h3>Available Settings</h3>
+          <table>
+            <thead>
+              <tr>
+                <th>Setting</th>
+                <th>Description</th>
+                <th>Default</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><code>portalName</code></td>
+                <td>Name shown in portal header</td>
+                <td>"Feedback Portal"</td>
+              </tr>
+              <tr>
+                <td><code>portalLogo</code></td>
+                <td>URL to your logo image (recommended: 200x50px)</td>
+                <td>PainSolver logo</td>
+              </tr>
+              <tr>
+                <td><code>primaryColor</code></td>
+                <td>Primary brand color (hex)</td>
+                <td>#004549</td>
+              </tr>
+              <tr>
+                <td><code>accentColor</code></td>
+                <td>Accent/highlight color (hex)</td>
+                <td>#00eef9</td>
+              </tr>
+              <tr>
+                <td><code>customCss</code></td>
+                <td>Custom CSS to inject (advanced)</td>
+                <td>None</td>
+              </tr>
+            </tbody>
+          </table>
+          <h3>API Endpoints</h3>
+          <pre><button class="copy-btn" type="button">Copy</button><code># Get portal settings
+GET /api/portal/settings
+X-Company-ID: &lt;company-id&gt;
+
+# Update portal settings
+PATCH /api/portal/settings
+X-Company-ID: &lt;company-id&gt;
+Authorization: Bearer &lt;API_KEY&gt;
+{
+  "portalName": "Acme Feedback",
+  "primaryColor": "#1e40af",
+  "accentColor": "#3b82f6",
+  "portalLogo": "https://yourcdn.com/logo.png"
+}
+
+# Upload logo
+POST /api/uploads/image
+Content-Type: multipart/form-data
+Authorization: Bearer &lt;API_KEY&gt;
+
+file: &lt;image-file&gt;
+purpose: "portal_logo"</code></pre>
+          <h3>Custom CSS Example</h3>
+          <pre><button class="copy-btn" type="button">Copy</button><code>/* Hide PainSolver branding */
+.ps-footer-brand { display: none; }
+
+/* Custom button styling */
+.ps-btn-primary {
+  border-radius: 8px;
+  font-weight: 600;
+}
+
+/* Custom card styling */
+.ps-card {
+  border: 1px solid #e5e7eb;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+}</code></pre>
+        </section>
+
+        <section id="multi-tenancy" data-title="Multi-Tenancy API">
+          <h2>Multi-Tenancy API</h2>
+          <p>
+            PainSolver supports multi-tenant deployments where each company has isolated data and settings.
+          </p>
+          <h3>Company Context</h3>
+          <p>All API requests should include company context via one of these methods:</p>
           <ul>
-            <li>CNAME configuration for custom subdomains</li>
-            <li>White-label portal with your branding</li>
-            <li>Custom SSL certificates via Let's Encrypt</li>
-            <li>Per-workspace URL configuration</li>
+            <li><strong>Header:</strong> <code>X-Company-ID: &lt;company-id&gt;</code> or <code>X-Company-Slug: &lt;slug&gt;</code></li>
+            <li><strong>Subdomain:</strong> <code>acme.painsolver.vercel.app</code></li>
+            <li><strong>Custom domain:</strong> <code>feedback.acme.com</code></li>
+            <li><strong>Authenticated user:</strong> Company is derived from user's membership</li>
           </ul>
+          <h3>Create Company</h3>
+          <pre><button class="copy-btn" type="button">Copy</button><code>POST /api/tenant/companies
+{
+  "name": "Acme Corporation",
+  "slug": "acme-corp"
+}
+
+Response:
+{
+  "company": {
+    "id": "clx123...",
+    "name": "Acme Corporation",
+    "slug": "acme-corp"
+  },
+  "defaultBoardId": "clx456..."
+}</code></pre>
+          <h3>List Accessible Companies</h3>
+          <pre><button class="copy-btn" type="button">Copy</button><code>GET /api/tenant/companies
+Authorization: Bearer &lt;API_KEY&gt;
+
+Response:
+{
+  "companies": [
+    { "id": "clx123...", "name": "Acme Corp", "slug": "acme-corp" }
+  ],
+  "currentCompanyId": "clx123..."
+}</code></pre>
+          <h3>Get Company Details</h3>
+          <pre><button class="copy-btn" type="button">Copy</button><code>GET /api/tenant/company
+X-Company-ID: &lt;company-id&gt;
+Authorization: Bearer &lt;API_KEY&gt;
+
+Response:
+{
+  "company": {
+    "id": "clx123...",
+    "name": "Acme Corporation",
+    "slug": "acme-corp",
+    "monthlySpend": 15000,
+    "healthStatus": "healthy",
+    "boardCount": 3,
+    "userCount": 25,
+    "portalSettings": {...}
+  }
+}</code></pre>
+          <h3>Company Stats</h3>
+          <pre><button class="copy-btn" type="button">Copy</button><code>GET /api/tenant/company/stats
+X-Company-ID: &lt;company-id&gt;
+Authorization: Bearer &lt;API_KEY&gt;
+
+Response:
+{
+  "stats": {
+    "boardCount": 3,
+    "postCount": 156,
+    "userCount": 25,
+    "voteCount": 1240,
+    "recentPosts": [...]
+  }
+}</code></pre>
+          <h3>Invite User to Company</h3>
+          <pre><button class="copy-btn" type="button">Copy</button><code>POST /api/tenant/company/invite
+X-Company-ID: &lt;company-id&gt;
+Authorization: Bearer &lt;API_KEY&gt;
+{
+  "email": "newuser@acme.com",
+  "role": "member",  // or "admin"
+  "name": "New User"
+}</code></pre>
+        </section>
+
+        <section id="company-api" data-title="Company API">
+          <h2>Company API</h2>
           <p>
-            <em>This feature is on our roadmap. Contact us if you need custom domain support for your deployment.</em>
+            Manage boards, posts, and settings for your company.
           </p>
+          <h3>Boards</h3>
+          <pre><button class="copy-btn" type="button">Copy</button><code># List boards
+GET /api/company/boards
+X-Company-ID: &lt;company-id&gt;
+
+# Create board
+POST /api/company/boards
+X-Company-ID: &lt;company-id&gt;
+{
+  "name": "Feature Requests",
+  "visibility": "public"  // or "private", "custom"
+}
+
+# Update board settings
+PATCH /api/company/boards/:boardId
+{
+  "visibility": "private",
+  "allowedSegments": ["enterprise", "pro"]
+}</code></pre>
+          <h3>Posts (Ideas)</h3>
+          <pre><button class="copy-btn" type="button">Copy</button><code># List feedback posts
+GET /api/company/feedback?boardId=xxx&sort=trending&filter=all
+
+# Get single post with details
+GET /api/company/posts/:postId
+
+# Update post status
+PATCH /api/company/posts/:postId
+{
+  "status": "in_progress",
+  "ownerName": "Product Team",
+  "eta": "2024-Q2"
+}
+
+# Merge posts
+POST /api/company/posts/:postId/merge
+{
+  "sourcePostIds": ["post1", "post2"]
+}</code></pre>
+          <h3>Members</h3>
+          <pre><button class="copy-btn" type="button">Copy</button><code># List team members
+GET /api/company/members
+X-Company-ID: &lt;company-id&gt;
+
+Response:
+{
+  "members": [
+    {
+      "id": "usr123",
+      "name": "John Doe",
+      "email": "john@acme.com",
+      "role": "admin"
+    }
+  ]
+}</code></pre>
+        </section>
+
+        <section id="ai-inbox-api" data-title="AI Inbox API">
+          <h2>AI Inbox API</h2>
+          <p>
+            Configure AI agents that automatically process customer feedback from various sources.
+          </p>
+          <h3>Supported Sources</h3>
+          <ul>
+            <li><strong>Freshdesk</strong> – Support tickets and conversations</li>
+            <li><strong>Zoom</strong> – Meeting transcript analysis</li>
+            <li><strong>Slack</strong> – Channel message monitoring</li>
+          </ul>
+          <h3>Freshdesk Configuration</h3>
+          <pre><button class="copy-btn" type="button">Copy</button><code># Configure Freshdesk connection
+POST /api/integrations/freshdesk/configure
+X-Company-ID: &lt;company-id&gt;
+{
+  "domain": "yourcompany.freshdesk.com",
+  "apiKey": "your-freshdesk-api-key",
+  "filterField": "group_id",
+  "filterValue": "123"
+}
+
+# Test connection
+POST /api/integrations/freshdesk/test-connection
+{
+  "domain": "yourcompany.freshdesk.com",
+  "apiKey": "your-freshdesk-api-key"
+}
+
+# Import recent tickets
+POST /api/integrations/freshdesk/import-tickets
+{
+  "daysBack": 7,
+  "maxTickets": 100
+}
+
+# Get activity log
+GET /api/integrations/freshdesk/activity
+
+# Disconnect
+POST /api/integrations/freshdesk/disconnect</code></pre>
+          <h3>Zoom Configuration</h3>
+          <pre><button class="copy-btn" type="button">Copy</button><code># Get OAuth connect URL
+GET /api/integrations/zoom/connect-url
+
+# Check connection status
+GET /api/integrations/zoom/status
+
+# Import transcripts
+POST /api/integrations/zoom/import-transcripts
+{
+  "daysBack": 30,
+  "maxMeetings": 50
+}
+
+# List imported transcripts
+GET /api/integrations/zoom/transcripts</code></pre>
+          <h3>Slack Configuration</h3>
+          <pre><button class="copy-btn" type="button">Copy</button><code># Get OAuth connect URL
+GET /api/integrations/slack/connect-url
+
+# Check connection status
+GET /api/integrations/slack/status
+
+# List available channels
+GET /api/integrations/slack/channels
+
+# Configure monitored channels
+POST /api/integrations/slack/configure-channels
+{
+  "channelIds": ["C123", "C456"],
+  "channelNames": ["#feedback", "#feature-requests"]
+}
+
+# Import channel messages
+POST /api/integrations/slack/import-messages
+{
+  "daysBack": 7,
+  "maxMessages": 200
+}</code></pre>
+          <h3>Triage Queue</h3>
+          <pre><button class="copy-btn" type="button">Copy</button><code># Get triage items (pending AI review)
+GET /api/company/triage?status=needs_triage&source=all
+
+# Approve and merge into existing post
+POST /api/company/triage/:eventId/merge
+{
+  "postId": "existing-post-id"
+}
+
+# Create new idea from triage item
+POST /api/company/triage/:eventId/create-idea
+{
+  "boardId": "board-id",
+  "title": "Custom title",
+  "details": "Custom description"
+}
+
+# Skip/dismiss triage item
+POST /api/company/triage/:eventId/skip</code></pre>
+          <h3>AI Processing Pipeline</h3>
+          <p>When a pain event is ingested:</p>
+          <ol>
+            <li><strong>Intent Extraction</strong> – GPT-4 extracts the core request, category, sentiment, and urgency</li>
+            <li><strong>Embedding Generation</strong> – Text is converted to vector embedding for similarity search</li>
+            <li><strong>Matching</strong> – Compares against existing posts using cosine similarity</li>
+            <li><strong>Confidence Scoring</strong> – Calculates confidence based on similarity and text clarity</li>
+            <li><strong>Routing</strong> – High-confidence matches are auto-merged; others go to triage</li>
+          </ol>
         </section>
 
         <section id="api-map" data-title="API Mapping">
