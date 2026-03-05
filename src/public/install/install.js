@@ -142,15 +142,60 @@
   }
 
   function submitSetup() {
-    // In a real implementation, this would:
-    // 1. POST to /api/v1/onboarding/setup with company/board/tools info
-    // 2. Backend creates board, API credentials, returns tokens
-    // 3. Display the real credentials
-    
-    // For now, generate demo credentials
-    generateCredentials();
-    renderInstallStep();
-    showStep(4);
+    // Show loading state
+    var submitBtn = document.querySelector('#process-form button[type="submit"]');
+    if (submitBtn) {
+      submitBtn.disabled = true;
+      submitBtn.textContent = "Setting up...";
+    }
+
+    // Generate company slug from name
+    var companySlug = state.companyName
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/(^-|-$)/g, "") || "my-company";
+
+    // Create company via API
+    fetch("/api/tenant/companies", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: state.companyName,
+        slug: companySlug
+      })
+    })
+      .then(function (res) {
+        if (!res.ok) {
+          return res.json().then(function (data) {
+            throw new Error(data.error || "Failed to create company");
+          });
+        }
+        return res.json();
+      })
+      .then(function (companyData) {
+        state.companyId = companyData.company.id;
+        state.companySlug = companyData.company.slug;
+        state.boardId = companyData.defaultBoardId;
+
+        // Generate credentials (in a real implementation, this would come from the backend)
+        generateCredentials();
+        renderInstallStep();
+        showStep(4);
+      })
+      .catch(function (error) {
+        console.error("Setup error:", error);
+        // Show error but still allow demo mode
+        alert("Setup encountered an issue: " + error.message + "\n\nProceeding in demo mode.");
+        generateCredentials();
+        renderInstallStep();
+        showStep(4);
+      })
+      .finally(function () {
+        if (submitBtn) {
+          submitBtn.disabled = false;
+          submitBtn.textContent = "Complete Setup";
+        }
+      });
   }
 
   // Event Listeners

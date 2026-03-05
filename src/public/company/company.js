@@ -1,5 +1,7 @@
 (function companyApp(window, document) {
   var state = {
+    companyId: null,  // Multi-tenancy: current company context
+    companySlug: null,
     tab: "feedback",
     view: "all",
     boardId: "",
@@ -795,13 +797,21 @@
   }
 
   function headers() {
-    return {
+    var h = {
       "Content-Type": "application/json",
       "x-painsolver-role": "member",
       "x-painsolver-auth": "true",
       "x-painsolver-user-id": "company-member",
       "x-painsolver-email": "member@painsolver.io"
     };
+    // Multi-tenancy: include company context in all requests
+    if (state.companyId) {
+      h["X-Company-ID"] = state.companyId;
+    }
+    if (state.companySlug) {
+      h["X-Company-Slug"] = state.companySlug;
+    }
+    return h;
   }
 
   function request(path, options) {
@@ -5920,6 +5930,37 @@
     }
   }
 
+  function loadCompanyContext() {
+    // Try to get company from URL first (e.g., /company/acme-corp or ?company=acme-corp)
+    var pathParts = window.location.pathname.split("/");
+    var companySlugFromPath = pathParts.length > 2 && pathParts[1] === "company" ? pathParts[2] : null;
+    var urlParams = new URLSearchParams(window.location.search);
+    var companySlugFromQuery = urlParams.get("company");
+    
+    if (companySlugFromPath) {
+      state.companySlug = companySlugFromPath;
+    } else if (companySlugFromQuery) {
+      state.companySlug = companySlugFromQuery;
+    }
+    
+    // Load company details from session/API
+    return request("/api/company/session")
+      .then(function (data) {
+        if (data.actor && data.actor.companyId) {
+          state.companyId = data.actor.companyId;
+        }
+        if (data.actor && data.actor.companySlug) {
+          state.companySlug = data.actor.companySlug;
+        }
+        return data;
+      })
+      .catch(function (err) {
+        console.warn("Failed to load company context:", err);
+        // Continue without company context for backwards compatibility
+        return null;
+      });
+  }
+
   function bootstrap() {
     renderTabs();
     renderSavedViews();
@@ -5944,7 +5985,10 @@
     state.errors.reportingPosts = "";
     state.errors.reportingOpportunities = "";
 
-    Promise.all([loadSummary(), loadMembers(), loadBoards(), loadSavedFilters()])
+    // Load company context first, then load data
+    loadCompanyContext().then(function () {
+      return Promise.all([loadSummary(), loadMembers(), loadBoards(), loadSavedFilters()]);
+    })
       .then(function () {
         return Promise.all([
           loadFeedback(),

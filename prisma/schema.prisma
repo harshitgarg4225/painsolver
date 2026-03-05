@@ -28,6 +28,7 @@ enum UserRole {
   customer
   member
   admin
+  owner
 }
 
 enum BoardVisibility {
@@ -79,29 +80,41 @@ enum AiInboxRoutingMode {
   individual
 }
 
+// ============================================
+// TENANT (Company) - The root of multi-tenancy
+// ============================================
 model Company {
   id               String   @id @default(cuid())
   name             String
+  slug             String   @unique  // URL-safe identifier (e.g., "acme-corp")
   monthlySpend     Float    @default(0)
   healthStatus     String   @default("unknown")
   stripeCustomerId String?  @unique
+  
+  // Tenant-owned resources
   users            User[]
+  boards           Board[]
+  aiInboxConfigs   AiInboxConfig[]
+  customDomains    CustomDomain[]
+  portalSettings   PortalSettings?
+  apiCredentials   ApiCredential[]
+  
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
-  @@unique([name])
+  @@index([slug])
 }
 
 model User {
   id                   String                  @id @default(cuid())
   companyId            String
-  email                String                  @unique
+  email                String
   name                 String                  @default("")
-  appUserId            String?                 @unique
+  appUserId            String?
   hmacHash             String                  @default("")
   role                 UserRole                @default(customer)
   segments             String[]                @default([])
-  company              Company                 @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  company              Company                 @relation(fields: [companyId], references: [id], onDelete: Cascade)
   votes                Vote[]
   painEvents           PainEvent[]
   comments             Comment[]               @relation("CommentAuthor")
@@ -113,14 +126,22 @@ model User {
   slackConnection      SlackConnection?
   createdAt            DateTime                @default(now())
   updatedAt            DateTime                @updatedAt
+
+  // Email unique within company, appUserId unique within company
+  @@unique([companyId, email])
+  @@unique([companyId, appUserId])
+  @@index([companyId])
 }
 
 model Board {
   id              String          @id @default(cuid())
+  companyId       String
   name            String
+  slug            String          // URL-safe board name
   isPrivate       Boolean         @default(false)
   visibility      BoardVisibility @default(public)
   allowedSegments String[]        @default([])
+  company         Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
   categories      Category[]
   posts           Post[]
   accessRequests  AccessRequest[]
@@ -129,7 +150,10 @@ model Board {
   createdAt       DateTime        @default(now())
   updatedAt       DateTime        @updatedAt
 
-  @@unique([name])
+  // Board names unique within company
+  @@unique([companyId, name])
+  @@unique([companyId, slug])
+  @@index([companyId])
 }
 
 model Category {
@@ -219,7 +243,7 @@ model AiActionLog {
   actionTaken     AiActionTaken
   confidenceScore Float
   status          AiActionStatus
-  metadata        Json?         // Enhanced AI extraction metadata
+  metadata        Json?
   painEvent       PainEvent     @relation(fields: [painEventId], references: [id], onDelete: Cascade)
   votes           Vote[]
   createdAt       DateTime      @default(now())
@@ -233,7 +257,7 @@ model Comment {
   value            String    @db.Text
   isPrivate        Boolean   @default(false)
   replyToCommentId String?
-  images           String[]  @default([])  // Array of image URLs
+  images           String[]  @default([])
   post             Post      @relation(fields: [postId], references: [id], onDelete: Cascade)
   author           User      @relation("CommentAuthor", fields: [authorId], references: [id], onDelete: Restrict)
   replyToComment   Comment?  @relation("CommentReplies", fields: [replyToCommentId], references: [id], onDelete: SetNull)
@@ -265,14 +289,21 @@ model ChangelogEntry {
   @@index([isPublished])
 }
 
+// ============================================
+// TENANT-SCOPED: API Credentials
+// ============================================
 model ApiCredential {
   id        String   @id @default(cuid())
+  companyId String
   name      String
   keyHash   String   @unique
   isActive  Boolean  @default(true)
   scopes    Json?
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([companyId])
 }
 
 model AccessRequest {
@@ -333,13 +364,17 @@ model SavedFilter {
   @@index([userId, createdAt])
 }
 
+// ============================================
+// TENANT-SCOPED: AI Inbox Configuration
+// ============================================
 model AiInboxConfig {
-  id                        String            @id @default(cuid())
-  source                    PainEventSource   @unique
+  id                        String             @id @default(cuid())
+  companyId                 String
+  source                    PainEventSource
   routingMode               AiInboxRoutingMode
-  enabled                   Boolean           @default(true)
+  enabled                   Boolean            @default(true)
   freshdeskDomain           String?
-  freshdeskApiKey           String?           @db.Text
+  freshdeskApiKey           String?            @db.Text
   freshdeskFilterField      String?
   freshdeskFilterValue      String?
   freshdeskFieldCatalog     Json?
@@ -347,11 +382,16 @@ model AiInboxConfig {
   freshdeskLastTicketSyncAt DateTime?
   slackTeamId               String?
   slackTeamName             String?
-  slackChannelIds           String[]          @default([])
-  slackChannelNames         String[]          @default([])
+  slackChannelIds           String[]           @default([])
+  slackChannelNames         String[]           @default([])
   slackLastSyncAt           DateTime?
-  createdAt                 DateTime          @default(now())
-  updatedAt                 DateTime          @updatedAt
+  company                   Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdAt                 DateTime           @default(now())
+  updatedAt                 DateTime           @updatedAt
+
+  // One config per source per company
+  @@unique([companyId, source])
+  @@index([companyId])
 }
 
 model ZoomConnection {
@@ -402,25 +442,35 @@ enum CustomDomainStatus {
   active
 }
 
+// ============================================
+// TENANT-SCOPED: Custom Domains
+// ============================================
 model CustomDomain {
   id                 String             @id @default(cuid())
+  companyId          String
   domain             String             @unique
   status             CustomDomainStatus @default(pending_verification)
   verificationToken  String             @unique @default(cuid())
-  verificationMethod String             @default("dns_txt")  // dns_txt, dns_cname
-  sslStatus          String             @default("pending")  // pending, provisioning, active, failed
+  verificationMethod String             @default("dns_txt")
+  sslStatus          String             @default("pending")
   verifiedAt         DateTime?
   lastCheckedAt      DateTime?
   errorMessage       String?
+  company            Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
   createdAt          DateTime           @default(now())
   updatedAt          DateTime           @updatedAt
 
+  @@index([companyId])
   @@index([status])
 }
 
+// ============================================
+// TENANT-SCOPED: Portal Settings
+// ============================================
 model PortalSettings {
   id                  String   @id @default(cuid())
-  portalName          String   @default("PainSolver")
+  companyId           String   @unique
+  portalName          String   @default("Feedback Portal")
   portalLogo          String?
   primaryColor        String   @default("#004549")
   accentColor         String   @default("#00eef9")
@@ -430,6 +480,7 @@ model PortalSettings {
   requireEmailVerify  Boolean  @default(false)
   maxImageSizeMb      Int      @default(5)
   allowedImageTypes   String[] @default(["image/jpeg", "image/png", "image/gif", "image/webp"])
+  company             Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 }
@@ -441,8 +492,8 @@ model UploadedFile {
   mimeType    String
   sizeBytes   Int
   url         String
-  uploadedBy  String?  // userId if authenticated
-  purpose     String   @default("comment")  // comment, changelog, avatar
+  uploadedBy  String?
+  purpose     String   @default("comment")
   createdAt   DateTime @default(now())
 
   @@index([uploadedBy])

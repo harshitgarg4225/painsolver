@@ -28,6 +28,8 @@ import { zoomIntegrationRoutes } from "./routes/zoomIntegrationRoutes";
 import { slackIntegrationRoutes } from "./routes/slackIntegrationRoutes";
 import { uploadRoutes } from "./routes/uploadRoutes";
 import { customDomainRoutes } from "./routes/customDomainRoutes";
+import { tenantRoutes } from "./routes/tenantRoutes";
+import { resolveTenantContext } from "./middleware/tenantContext";
 
 export const app = express();
 
@@ -48,6 +50,7 @@ app.use(express.json({ limit: "30mb" }));
 app.use(attachRequestId);
 app.use(resolveApiCredential);
 app.use(resolveActor);
+app.use(resolveTenantContext);
 
 app.get("/health", (_req, res) => {
   res.status(200).json({ ok: true });
@@ -127,6 +130,7 @@ app.use("/api/integrations/zoom", zoomIntegrationRoutes);
 app.use("/api/integrations/slack", slackIntegrationRoutes);
 app.use("/api/uploads", uploadRoutes);
 app.use("/api/custom-domains", customDomainRoutes);
+app.use("/api/tenant", tenantRoutes);
 app.use("/api/portal", portalRoutes);
 app.use("/api/company", companyRoutes);
 app.use(

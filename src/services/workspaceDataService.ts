@@ -876,11 +876,15 @@ function computeBoardAccess(
   });
 }
 
-export async function listBoardsForActor(actorCtx: ActorContext | undefined): Promise<WorkspaceBoardView[]> {
+export async function listBoardsForActor(
+  actorCtx: ActorContext | undefined,
+  companyId?: string
+): Promise<WorkspaceBoardView[]> {
   const actor = asWorkspaceActor(actorCtx);
   const actorRecord = actor.isAuthenticated ? await upsertActorUser(prisma, actor) : { user: null };
 
   const boards = await prisma.board.findMany({
+    where: companyId ? { companyId } : undefined,
     orderBy: { createdAt: "asc" }
   });
 
@@ -923,6 +927,7 @@ export async function listBoardsForActor(actorCtx: ActorContext | undefined): Pr
 }
 
 export async function createBoardForCompany(input: {
+  companyId: string;
   name: string;
   visibility: "public" | "private" | "custom";
   allowedSegments?: string[];
@@ -935,13 +940,16 @@ export async function createBoardForCompany(input: {
   postCount: number;
 }> {
   const normalizedName = input.name.trim();
+  const slug = normalizedName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
   const normalizedSegments = Array.from(
     new Set((input.allowedSegments ?? []).map((segment) => segment.trim().toLowerCase()).filter(Boolean))
   );
 
   const created = await prisma.board.create({
     data: {
+      companyId: input.companyId,
       name: normalizedName,
+      slug,
       visibility: input.visibility,
       isPrivate: input.visibility !== "public",
       allowedSegments: input.visibility === "custom" ? normalizedSegments : [],
@@ -980,7 +988,7 @@ export async function getBoardAccessForActor(
   return computeBoardAccess(board, actor, actorRecord.user);
 }
 
-export async function listBoardSettingsForCompany(): Promise<
+export async function listBoardSettingsForCompany(companyId?: string): Promise<
   Array<{
     id: string;
     name: string;
@@ -991,6 +999,7 @@ export async function listBoardSettingsForCompany(): Promise<
   }>
 > {
   const boards = await prisma.board.findMany({
+    where: companyId ? { companyId } : undefined,
     orderBy: { name: "asc" },
     include: {
       _count: {
@@ -2006,18 +2015,19 @@ export async function markAllNotificationsReadForActor(actorCtx: ActorContext | 
   return updated.count;
 }
 
-export async function listCompanyMembers(): Promise<
+export async function listCompanyMembers(companyId?: string): Promise<
   Array<{
     id: string;
     name: string;
     email: string;
-    role: "admin" | "member";
+    role: "admin" | "member" | "owner";
   }>
 > {
   const members = await prisma.user.findMany({
     where: {
+      ...(companyId ? { companyId } : {}),
       role: {
-        in: ["admin", "member"]
+        in: ["admin", "member", "owner"]
       }
     },
     orderBy: [{ role: "desc" }, { name: "asc" }]
@@ -2031,22 +2041,26 @@ export async function listCompanyMembers(): Promise<
   }));
 }
 
-export async function companySummary(): Promise<{
+export async function companySummary(companyId?: string): Promise<{
   boardCount: number;
   postCount: number;
   triageCount: number;
   totalAttachedMrr: number;
 }> {
+  const boardWhere = companyId ? { companyId } : undefined;
+  const postWhere = companyId 
+    ? { mergedIntoPostId: null, board: { companyId } }
+    : { mergedIntoPostId: null };
+  const triageWhere = companyId
+    ? { status: "needs_triage" as const, user: { companyId } }
+    : { status: "needs_triage" as const };
+
   const [boardCount, postCount, triageCount, mrr] = await Promise.all([
-    prisma.board.count(),
-    prisma.post.count({
-      where: { mergedIntoPostId: null }
-    }),
-    prisma.painEvent.count({
-      where: { status: "needs_triage" }
-    }),
+    prisma.board.count({ where: boardWhere }),
+    prisma.post.count({ where: postWhere }),
+    prisma.painEvent.count({ where: triageWhere }),
     prisma.post.aggregate({
-      where: { mergedIntoPostId: null },
+      where: postWhere,
       _sum: { totalAttachedMrr: true }
     })
   ]);

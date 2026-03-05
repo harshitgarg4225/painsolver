@@ -5,6 +5,7 @@ import { z } from "zod";
 import { env } from "../config/env";
 import { prisma } from "../db/prisma";
 import { requireCompanyWriteAccess } from "../middleware/actorAccess";
+import { requireTenantContext, getCompanyId } from "../middleware/tenantContext";
 import { ingestFreshdeskSignal } from "../services/freshdeskIngestionService";
 import { processPainEvent } from "../services/painEventService";
 import {
@@ -51,23 +52,27 @@ const freshdeskConfigSelect = {
 
 type FreshdeskConfigRecord = Awaited<ReturnType<typeof ensureFreshdeskConfigRaw>>;
 
-async function ensureFreshdeskConfigRaw() {
+async function ensureFreshdeskConfigRaw(companyId: string) {
   return prisma.aiInboxConfig.upsert({
     where: {
-      source: "freshdesk"
+      companyId_source: {
+        companyId,
+        source: "freshdesk"
+      }
     },
     update: {},
     create: {
+      companyId,
       source: "freshdesk",
       routingMode: "central",
       enabled: true
     },
-    select: freshdeskConfigSelect
+    select: { ...freshdeskConfigSelect, companyId: true }
   });
 }
 
-async function ensureFreshdeskConfig(): Promise<FreshdeskConfigRecord> {
-  return ensureFreshdeskConfigRaw();
+async function ensureFreshdeskConfig(companyId: string): Promise<FreshdeskConfigRecord> {
+  return ensureFreshdeskConfigRaw(companyId);
 }
 
 async function syncFreshdeskParams(config: FreshdeskConfigRecord): Promise<{
@@ -140,14 +145,16 @@ function fieldsFromConfig(config: FreshdeskConfigRecord): Array<{
 export const freshdeskIntegrationRoutes = Router();
 
 freshdeskIntegrationRoutes.use(requireCompanyWriteAccess);
+freshdeskIntegrationRoutes.use(requireTenantContext);
 
 // =============================================
 // Test Connection - Validates credentials
 // =============================================
 freshdeskIntegrationRoutes.post("/test-connection", async (req, res) => {
+  const companyId = getCompanyId(req);
   const { domain, apiKey } = req.body as { domain?: string; apiKey?: string };
   
-  const config = await ensureFreshdeskConfig();
+  const config = await ensureFreshdeskConfig(getCompanyId(req));
   const testDomain = domain || config.freshdeskDomain;
   const testApiKey = apiKey || config.freshdeskApiKey;
 
@@ -195,10 +202,14 @@ freshdeskIntegrationRoutes.post("/test-connection", async (req, res) => {
 // =============================================
 // Activity Log - Recent processed events
 // =============================================
-freshdeskIntegrationRoutes.get("/activity", async (_req, res) => {
+freshdeskIntegrationRoutes.get("/activity", async (req, res) => {
+  const companyId = getCompanyId(req);
   try {
     const recentEvents = await prisma.painEvent.findMany({
-      where: { source: "freshdesk" },
+      where: { 
+        source: "freshdesk",
+        user: { companyId }
+      },
       orderBy: { createdAt: "desc" },
       take: 20,
       select: {
@@ -238,7 +249,10 @@ freshdeskIntegrationRoutes.get("/activity", async (_req, res) => {
 
     const summary = await prisma.painEvent.groupBy({
       by: ["status"],
-      where: { source: "freshdesk" },
+      where: { 
+        source: "freshdesk",
+        user: { companyId }
+      },
       _count: { id: true }
     });
 
@@ -289,7 +303,7 @@ freshdeskIntegrationRoutes.get("/activity", async (_req, res) => {
 // Sync Now - Manual trigger with progress
 // =============================================
 freshdeskIntegrationRoutes.post("/sync-now", async (req, res) => {
-  const config = await ensureFreshdeskConfig();
+  const config = await ensureFreshdeskConfig(getCompanyId(req));
   const domain = config.freshdeskDomain ?? "";
   const apiKey = config.freshdeskApiKey ?? "";
 
@@ -388,8 +402,8 @@ freshdeskIntegrationRoutes.post("/sync-now", async (req, res) => {
   }
 });
 
-freshdeskIntegrationRoutes.get("/status", async (_req, res) => {
-  const config = await ensureFreshdeskConfig();
+freshdeskIntegrationRoutes.get("/status", async (req, res) => {
+  const config = await ensureFreshdeskConfig(getCompanyId(req));
   res.status(200).json({
     source: {
       source: "freshdesk",
@@ -407,7 +421,7 @@ freshdeskIntegrationRoutes.post("/configure", async (req, res) => {
     return;
   }
 
-  const existing = await ensureFreshdeskConfig();
+  const existing = await ensureFreshdeskConfig(getCompanyId(req));
   const payload = parsed.data;
 
   const updateData: Record<string, unknown> = {};
@@ -456,8 +470,8 @@ freshdeskIntegrationRoutes.post("/configure", async (req, res) => {
   });
 });
 
-freshdeskIntegrationRoutes.get("/params", async (_req, res) => {
-  const config = await ensureFreshdeskConfig();
+freshdeskIntegrationRoutes.get("/params", async (req, res) => {
+  const config = await ensureFreshdeskConfig(getCompanyId(req));
 
   try {
     const synced = await syncFreshdeskParams(config);
@@ -476,8 +490,8 @@ freshdeskIntegrationRoutes.get("/params", async (_req, res) => {
   }
 });
 
-freshdeskIntegrationRoutes.get("/fields", async (_req, res) => {
-  const config = await ensureFreshdeskConfig();
+freshdeskIntegrationRoutes.get("/fields", async (req, res) => {
+  const config = await ensureFreshdeskConfig(getCompanyId(req));
 
   try {
     const synced = await syncFreshdeskParams(config);
@@ -502,7 +516,7 @@ freshdeskIntegrationRoutes.post("/import-tickets", async (req, res) => {
     return;
   }
 
-  const config = await ensureFreshdeskConfig();
+  const config = await ensureFreshdeskConfig(getCompanyId(req));
   const domain = config.freshdeskDomain ?? "";
   const apiKey = config.freshdeskApiKey ?? "";
 
@@ -578,8 +592,8 @@ freshdeskIntegrationRoutes.post("/import-tickets", async (req, res) => {
   }
 });
 
-freshdeskIntegrationRoutes.post("/disconnect", async (_req, res) => {
-  const config = await ensureFreshdeskConfig();
+freshdeskIntegrationRoutes.post("/disconnect", async (req, res) => {
+  const config = await ensureFreshdeskConfig(getCompanyId(req));
   const updated = await prisma.aiInboxConfig.update({
     where: {
       id: config.id
@@ -632,7 +646,7 @@ freshdeskIntegrationRoutes.post("/webhook", async (req, res) => {
   }
 
   // Get Freshdesk config to check filters
-  const config = await ensureFreshdeskConfig();
+  const config = await ensureFreshdeskConfig(getCompanyId(req));
   
   if (!config.enabled) {
     console.log("[Freshdesk Webhook] Skipping - Freshdesk source is disabled");

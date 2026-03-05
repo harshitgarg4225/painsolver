@@ -9,6 +9,7 @@ import { z } from "zod";
 
 import { env } from "../config/env";
 import { requireCompanyWriteAccess } from "../middleware/actorAccess";
+import { requireTenantContext, getCompanyId } from "../middleware/tenantContext";
 import {
   addCommentAsActor,
   bulkUpdatePosts,
@@ -260,15 +261,22 @@ export const companyRoutes = Router();
 
 companyRoutes.get("/session", (req, res) => {
   res.status(200).json({
-    actor: req.actor ?? {
-      role: "anonymous",
-      isAuthenticated: false,
-      accessLevel: "read"
+    actor: {
+      ...(req.actor ?? {
+        role: "anonymous",
+        isAuthenticated: false,
+        accessLevel: "read"
+      }),
+      // Include tenant context if available
+      companyId: req.tenant?.companyId ?? null,
+      companySlug: req.tenant?.companySlug ?? null,
+      companyName: req.tenant?.companyName ?? null
     }
   });
 });
 
 companyRoutes.use(requireCompanyWriteAccess);
+companyRoutes.use(requireTenantContext);
 
 companyRoutes.post("/media/upload", async (req, res) => {
   const parsed = uploadMediaSchema.safeParse(req.body);
@@ -352,13 +360,13 @@ companyRoutes.post("/media/upload", async (req, res) => {
   });
 });
 
-companyRoutes.get("/summary", async (_req, res) => {
-  const metrics = await companySummary();
+companyRoutes.get("/summary", async (req, res) => {
+  const metrics = await companySummary(getCompanyId(req));
   res.status(200).json({ metrics });
 });
 
 companyRoutes.get("/boards", async (req, res) => {
-  const boards = await listBoardsForActor(req.actor);
+  const boards = await listBoardsForActor(req.actor, getCompanyId(req));
   res.status(200).json({ boards });
 });
 
@@ -371,6 +379,7 @@ companyRoutes.post("/boards", async (req, res) => {
 
   try {
     const board = await createBoardForCompany({
+      companyId: getCompanyId(req),
       name: parsed.data.name,
       visibility: parsed.data.visibility ?? "public",
       allowedSegments: parsed.data.allowedSegments
@@ -387,8 +396,8 @@ companyRoutes.post("/boards", async (req, res) => {
   }
 });
 
-companyRoutes.get("/board-settings", async (_req, res) => {
-  const boards = await listBoardSettingsForCompany();
+companyRoutes.get("/board-settings", async (req, res) => {
+  const boards = await listBoardSettingsForCompany(getCompanyId(req));
   res.status(200).json({ boards });
 });
 
@@ -413,8 +422,8 @@ companyRoutes.patch("/board-settings/:boardId", async (req, res) => {
   res.status(200).json({ board });
 });
 
-companyRoutes.get("/members", async (_req, res) => {
-  const members = await listCompanyMembers();
+companyRoutes.get("/members", async (req, res) => {
+  const members = await listCompanyMembers(getCompanyId(req));
   res.status(200).json({ members });
 });
 

@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { prisma } from "../db/prisma";
 import { ActorContext, requireAuthenticatedActor } from "../middleware/actorAccess";
+import { resolveTenantContext } from "../middleware/tenantContext";
 import {
   addCommentAsActor,
   createAccessRequestAsActor,
@@ -83,6 +84,9 @@ function getActor(actor: ActorContext | undefined): ActorContext {
 }
 
 export const portalRoutes = Router();
+
+// Apply tenant context middleware to all portal routes
+portalRoutes.use(resolveTenantContext);
 
 portalRoutes.get("/session", async (req, res) => {
   const actor = getActor(req.actor);
