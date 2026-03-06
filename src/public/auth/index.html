@@ -1,0 +1,556 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PainSolver - Sign In</title>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0" />
+  <style>
+    :root {
+      --bg: #0a0f14;
+      --surface: #141c24;
+      --surface-light: #1c2630;
+      --text: #e8ecef;
+      --text-muted: #8899a6;
+      --primary: #004549;
+      --primary-light: #006d73;
+      --accent: #00eef9;
+      --error: #ef4444;
+      --success: #10b981;
+      --line: #243240;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Inter', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    .auth-container {
+      width: 100%;
+      max-width: 420px;
+    }
+
+    .auth-card {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 40px;
+    }
+
+    .brand {
+      text-align: center;
+      margin-bottom: 32px;
+    }
+
+    .brand-logo {
+      width: 48px;
+      height: 48px;
+      background: linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%);
+      border-radius: 12px;
+      margin: 0 auto 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .brand-logo .ms {
+      font-size: 28px;
+      color: white;
+    }
+
+    .brand h1 {
+      font-family: 'Outfit', sans-serif;
+      font-size: 24px;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 4px;
+    }
+
+    .brand p {
+      color: var(--text-muted);
+      font-size: 14px;
+    }
+
+    .auth-tabs {
+      display: flex;
+      gap: 4px;
+      background: var(--surface-light);
+      padding: 4px;
+      border-radius: 10px;
+      margin-bottom: 24px;
+    }
+
+    .auth-tab {
+      flex: 1;
+      padding: 10px 16px;
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      font-size: 14px;
+      font-weight: 500;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .auth-tab.active {
+      background: var(--primary);
+      color: white;
+    }
+
+    .auth-tab:hover:not(.active) {
+      color: var(--text);
+    }
+
+    .auth-form {
+      display: none;
+    }
+
+    .auth-form.active {
+      display: block;
+    }
+
+    .form-group {
+      margin-bottom: 20px;
+    }
+
+    .form-group label {
+      display: block;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text);
+      margin-bottom: 6px;
+    }
+
+    .form-group input {
+      width: 100%;
+      padding: 12px 14px;
+      background: var(--surface-light);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      color: var(--text);
+      font-size: 14px;
+      transition: border-color 0.2s;
+    }
+
+    .form-group input:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+
+    .form-group input::placeholder {
+      color: var(--text-muted);
+    }
+
+    .form-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    .btn {
+      width: 100%;
+      padding: 14px 20px;
+      background: var(--primary);
+      border: none;
+      border-radius: 8px;
+      color: white;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+
+    .btn:hover {
+      background: var(--primary-light);
+    }
+
+    .btn:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    .btn .ms {
+      font-size: 18px;
+    }
+
+    .form-footer {
+      text-align: center;
+      margin-top: 20px;
+    }
+
+    .form-footer a {
+      color: var(--accent);
+      text-decoration: none;
+      font-size: 13px;
+    }
+
+    .form-footer a:hover {
+      text-decoration: underline;
+    }
+
+    .error-message {
+      background: rgba(239, 68, 68, 0.1);
+      border: 1px solid var(--error);
+      color: var(--error);
+      padding: 12px;
+      border-radius: 8px;
+      font-size: 13px;
+      margin-bottom: 20px;
+      display: none;
+    }
+
+    .error-message.show {
+      display: block;
+    }
+
+    .success-message {
+      background: rgba(16, 185, 129, 0.1);
+      border: 1px solid var(--success);
+      color: var(--success);
+      padding: 12px;
+      border-radius: 8px;
+      font-size: 13px;
+      margin-bottom: 20px;
+      display: none;
+    }
+
+    .success-message.show {
+      display: block;
+    }
+
+    .divider {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin: 24px 0;
+      color: var(--text-muted);
+      font-size: 12px;
+    }
+
+    .divider::before,
+    .divider::after {
+      content: "";
+      flex: 1;
+      height: 1px;
+      background: var(--line);
+    }
+
+    .spinner {
+      width: 18px;
+      height: 18px;
+      border: 2px solid rgba(255,255,255,0.3);
+      border-top-color: white;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    @media (max-width: 480px) {
+      .auth-card {
+        padding: 24px;
+      }
+
+      .form-row {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="auth-container">
+    <div class="auth-card">
+      <div class="brand">
+        <div class="brand-logo">
+          <span class="ms material-symbols-outlined">insights</span>
+        </div>
+        <h1>PainSolver</h1>
+        <p>Voice of Customer Platform</p>
+      </div>
+
+      <div class="auth-tabs">
+        <button class="auth-tab active" data-tab="login">Sign In</button>
+        <button class="auth-tab" data-tab="signup">Create Account</button>
+      </div>
+
+      <div id="error-message" class="error-message"></div>
+      <div id="success-message" class="success-message"></div>
+
+      <!-- Login Form -->
+      <form id="login-form" class="auth-form active">
+        <div class="form-group">
+          <label for="login-email">Email</label>
+          <input type="email" id="login-email" name="email" placeholder="you@company.com" required>
+        </div>
+        <div class="form-group">
+          <label for="login-password">Password</label>
+          <input type="password" id="login-password" name="password" placeholder="••••••••" required>
+        </div>
+        <button type="submit" class="btn" id="login-btn">
+          <span class="btn-text">Sign In</span>
+        </button>
+        <div class="form-footer">
+          <a href="#" id="forgot-password-link">Forgot your password?</a>
+        </div>
+      </form>
+
+      <!-- Signup Form -->
+      <form id="signup-form" class="auth-form">
+        <div class="form-group">
+          <label for="signup-name">Your Name</label>
+          <input type="text" id="signup-name" name="name" placeholder="John Doe" required>
+        </div>
+        <div class="form-group">
+          <label for="signup-email">Work Email</label>
+          <input type="email" id="signup-email" name="email" placeholder="you@company.com" required>
+        </div>
+        <div class="form-group">
+          <label for="signup-company">Company Name</label>
+          <input type="text" id="signup-company" name="companyName" placeholder="Acme Inc">
+        </div>
+        <div class="form-group">
+          <label for="signup-password">Password</label>
+          <input type="password" id="signup-password" name="password" placeholder="At least 8 characters" minlength="8" required>
+        </div>
+        <button type="submit" class="btn" id="signup-btn">
+          <span class="btn-text">Create Account</span>
+        </button>
+        <div class="form-footer">
+          <p style="color: var(--text-muted); font-size: 12px;">
+            By signing up, you agree to our Terms of Service
+          </p>
+        </div>
+      </form>
+
+      <!-- Forgot Password Form -->
+      <form id="forgot-form" class="auth-form">
+        <p style="color: var(--text-muted); font-size: 14px; margin-bottom: 20px;">
+          Enter your email and we'll send you a link to reset your password.
+        </p>
+        <div class="form-group">
+          <label for="forgot-email">Email</label>
+          <input type="email" id="forgot-email" name="email" placeholder="you@company.com" required>
+        </div>
+        <button type="submit" class="btn" id="forgot-btn">
+          <span class="btn-text">Send Reset Link</span>
+        </button>
+        <div class="form-footer">
+          <a href="#" id="back-to-login">Back to Sign In</a>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    (function() {
+      var tabs = document.querySelectorAll(".auth-tab");
+      var loginForm = document.getElementById("login-form");
+      var signupForm = document.getElementById("signup-form");
+      var forgotForm = document.getElementById("forgot-form");
+      var errorMessage = document.getElementById("error-message");
+      var successMessage = document.getElementById("success-message");
+
+      function showError(msg) {
+        errorMessage.textContent = msg;
+        errorMessage.classList.add("show");
+        successMessage.classList.remove("show");
+      }
+
+      function showSuccess(msg) {
+        successMessage.textContent = msg;
+        successMessage.classList.add("show");
+        errorMessage.classList.remove("show");
+      }
+
+      function clearMessages() {
+        errorMessage.classList.remove("show");
+        successMessage.classList.remove("show");
+      }
+
+      function setButtonLoading(btn, loading) {
+        var text = btn.querySelector(".btn-text");
+        if (loading) {
+          btn.disabled = true;
+          text.innerHTML = '<div class="spinner"></div>';
+        } else {
+          btn.disabled = false;
+          text.textContent = btn.getAttribute("data-original-text") || text.textContent;
+        }
+      }
+
+      // Tab switching
+      tabs.forEach(function(tab) {
+        tab.addEventListener("click", function() {
+          var tabName = tab.getAttribute("data-tab");
+          tabs.forEach(function(t) { t.classList.remove("active"); });
+          tab.classList.add("active");
+          
+          clearMessages();
+          loginForm.classList.remove("active");
+          signupForm.classList.remove("active");
+          forgotForm.classList.remove("active");
+
+          if (tabName === "login") {
+            loginForm.classList.add("active");
+          } else if (tabName === "signup") {
+            signupForm.classList.add("active");
+          }
+        });
+      });
+
+      // Forgot password link
+      document.getElementById("forgot-password-link").addEventListener("click", function(e) {
+        e.preventDefault();
+        clearMessages();
+        loginForm.classList.remove("active");
+        forgotForm.classList.add("active");
+        tabs.forEach(function(t) { t.classList.remove("active"); });
+      });
+
+      document.getElementById("back-to-login").addEventListener("click", function(e) {
+        e.preventDefault();
+        clearMessages();
+        forgotForm.classList.remove("active");
+        loginForm.classList.add("active");
+        tabs[0].classList.add("active");
+      });
+
+      // Login form
+      loginForm.addEventListener("submit", function(e) {
+        e.preventDefault();
+        clearMessages();
+        
+        var btn = document.getElementById("login-btn");
+        btn.setAttribute("data-original-text", "Sign In");
+        setButtonLoading(btn, true);
+
+        var email = document.getElementById("login-email").value;
+        var password = document.getElementById("login-password").value;
+
+        fetch("/api/auth/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email: email, password: password })
+        })
+        .then(function(res) { return res.json(); })
+        .then(function(data) {
+          if (data.success) {
+            // Redirect to company dashboard
+            window.location.href = "/company";
+          } else {
+            showError(data.error || "Login failed");
+            setButtonLoading(btn, false);
+          }
+        })
+        .catch(function(err) {
+          showError("Network error. Please try again.");
+          setButtonLoading(btn, false);
+        });
+      });
+
+      // Signup form
+      signupForm.addEventListener("submit", function(e) {
+        e.preventDefault();
+        clearMessages();
+        
+        var btn = document.getElementById("signup-btn");
+        btn.setAttribute("data-original-text", "Create Account");
+        setButtonLoading(btn, true);
+
+        var name = document.getElementById("signup-name").value;
+        var email = document.getElementById("signup-email").value;
+        var companyName = document.getElementById("signup-company").value;
+        var password = document.getElementById("signup-password").value;
+
+        fetch("/api/auth/signup", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ 
+            name: name, 
+            email: email, 
+            companyName: companyName,
+            password: password 
+          })
+        })
+        .then(function(res) { return res.json(); })
+        .then(function(data) {
+          if (data.success) {
+            if (data.requiresVerification) {
+              showSuccess("Account created! Please check your email to verify your account.");
+              setTimeout(function() {
+                window.location.href = "/company";
+              }, 2000);
+            } else {
+              window.location.href = "/company";
+            }
+          } else {
+            showError(data.error || "Signup failed");
+            setButtonLoading(btn, false);
+          }
+        })
+        .catch(function(err) {
+          showError("Network error. Please try again.");
+          setButtonLoading(btn, false);
+        });
+      });
+
+      // Forgot password form
+      forgotForm.addEventListener("submit", function(e) {
+        e.preventDefault();
+        clearMessages();
+        
+        var btn = document.getElementById("forgot-btn");
+        btn.setAttribute("data-original-text", "Send Reset Link");
+        setButtonLoading(btn, true);
+
+        var email = document.getElementById("forgot-email").value;
+
+        fetch("/api/auth/forgot-password", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email: email })
+        })
+        .then(function(res) { return res.json(); })
+        .then(function(data) {
+          showSuccess(data.message || "If an account exists, you will receive a reset email.");
+          setButtonLoading(btn, false);
+        })
+        .catch(function(err) {
+          showError("Network error. Please try again.");
+          setButtonLoading(btn, false);
+        });
+      });
+
+      // Check if already logged in
+      fetch("/api/auth/session")
+        .then(function(res) { return res.json(); })
+        .then(function(data) {
+          if (data.authenticated) {
+            window.location.href = "/company";
+          }
+        });
+    })();
+  </script>
+</body>
+</html>
+

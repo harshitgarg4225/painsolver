@@ -7,6 +7,7 @@
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "build": "prisma generate && prisma db push --skip-generate && tsc -p tsconfig.json",
+    "postbuild": "node dist/scripts/ensureDefaultCompany.js || true",
     "start": "node dist/server.js",
     "worker": "tsx src/workers/startWorker.ts",
     "typecheck": "tsc --noEmit",
@@ -19,6 +20,7 @@
     "@vercel/blob": "^2.3.0",
     "bullmq": "^5.40.3",
     "compression": "^1.8.1",
+    "cookie-parser": "^1.4.7",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
     "helmet": "^8.0.0",
@@ -29,6 +31,7 @@
   },
   "devDependencies": {
     "@types/compression": "^1.8.1",
+    "@types/cookie-parser": "^1.4.8",
     "@types/express": "^5.0.0",
     "@types/node": "^22.13.8",
     "prisma": "^6.4.1",

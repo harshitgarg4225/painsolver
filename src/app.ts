@@ -1,10 +1,12 @@
 import path from "path";
 
 import compression from "compression";
+import cookieParser from "cookie-parser";
 import express from "express";
 import helmet from "helmet";
 
 import { apiCredentialsRoutes } from "./routes/apiCredentialsRoutes";
+import { authRoutes } from "./routes/authRoutes";
 import { boardsRoutes } from "./routes/boardsRoutes";
 import { categoriesRoutes } from "./routes/categoriesRoutes";
 import { changelogRoutes } from "./routes/changelogRoutes";
@@ -46,6 +48,7 @@ app.use(
   })
 );
 app.use(compression());
+app.use(cookieParser());
 app.use(express.json({ limit: "30mb" }));
 app.use(attachRequestId);
 app.use(resolveApiCredential);
@@ -99,6 +102,26 @@ app.get("/roadmap", (_req, res) => {
   const roadmapPath = path.resolve(process.cwd(), "src/public/roadmap/index.html");
   res.sendFile(roadmapPath);
 });
+
+app.use("/auth-assets", express.static(path.resolve(process.cwd(), "src/public/auth"), staticCacheOptions));
+app.get("/auth", (_req, res) => {
+  const authPath = path.resolve(process.cwd(), "src/public/auth/index.html");
+  res.sendFile(authPath);
+});
+app.get("/auth/verify-success", (_req, res) => {
+  res.sendFile(path.resolve(process.cwd(), "src/public/auth/verify-success.html"));
+});
+app.get("/auth/verify-error", (_req, res) => {
+  res.sendFile(path.resolve(process.cwd(), "src/public/auth/verify-error.html"));
+});
+app.get("/auth/reset-password", (_req, res) => {
+  res.sendFile(path.resolve(process.cwd(), "src/public/auth/reset-password.html"));
+});
+app.get("/auth/accept-invite", (_req, res) => {
+  res.sendFile(path.resolve(process.cwd(), "src/public/auth/accept-invite.html"));
+});
+app.get("/login", (_req, res) => res.redirect("/auth"));
+app.get("/signup", (_req, res) => res.redirect("/auth"));
 app.get("/roadmap/:slug", (_req, res) => {
   const roadmapPath = path.resolve(process.cwd(), "src/public/roadmap/index.html");
   res.sendFile(roadmapPath);
@@ -130,6 +153,7 @@ app.use("/api/integrations/zoom", zoomIntegrationRoutes);
 app.use("/api/integrations/slack", slackIntegrationRoutes);
 app.use("/api/uploads", uploadRoutes);
 app.use("/api/custom-domains", customDomainRoutes);
+app.use("/api/auth", authRoutes);
 app.use("/api/tenant", tenantRoutes);
 app.use("/api/portal", portalRoutes);
 app.use("/api/company", companyRoutes);

@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Email Verified - PainSolver</title>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0" />
+  <style>
+    :root {
+      --bg: #0a0f14;
+      --surface: #141c24;
+      --text: #e8ecef;
+      --text-muted: #8899a6;
+      --primary: #004549;
+      --accent: #00eef9;
+      --success: #10b981;
+      --line: #243240;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Inter', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      text-align: center;
+    }
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 48px 40px;
+      max-width: 400px;
+    }
+    .icon {
+      width: 64px;
+      height: 64px;
+      background: rgba(16, 185, 129, 0.1);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 24px;
+    }
+    .icon .ms {
+      font-size: 32px;
+      color: var(--success);
+    }
+    h1 {
+      font-family: 'Outfit', sans-serif;
+      font-size: 24px;
+      font-weight: 700;
+      margin-bottom: 12px;
+    }
+    p {
+      color: var(--text-muted);
+      font-size: 14px;
+      line-height: 1.6;
+      margin-bottom: 24px;
+    }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 24px;
+      background: var(--primary);
+      color: white;
+      text-decoration: none;
+      border-radius: 8px;
+      font-weight: 600;
+      font-size: 14px;
+      transition: background 0.2s;
+    }
+    .btn:hover { background: #006d73; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="icon">
+      <span class="ms material-symbols-outlined">check_circle</span>
+    </div>
+    <h1>Email Verified!</h1>
+    <p>Your email has been successfully verified. You can now access all features of PainSolver.</p>
+    <a href="/company" class="btn">
+      <span class="ms material-symbols-outlined">arrow_forward</span>
+      Go to Dashboard
+    </a>
+  </div>
+</body>
+</html>
+

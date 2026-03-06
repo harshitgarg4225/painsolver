@@ -110,11 +110,19 @@ model User {
   companyId            String
   email                String
   name                 String                  @default("")
+  passwordHash         String?                 // null for OAuth/SSO users
   appUserId            String?
   hmacHash             String                  @default("")
   role                 UserRole                @default(customer)
   segments             String[]                @default([])
+  emailVerified        Boolean                 @default(false)
+  emailVerifyToken     String?                 @unique
+  emailVerifyExpires   DateTime?
+  passwordResetToken   String?                 @unique
+  passwordResetExpires DateTime?
+  lastLoginAt          DateTime?
   company              Company                 @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  sessions             Session[]
   votes                Vote[]
   painEvents           PainEvent[]
   comments             Comment[]               @relation("CommentAuthor")
@@ -131,6 +139,21 @@ model User {
   @@unique([companyId, email])
   @@unique([companyId, appUserId])
   @@index([companyId])
+  @@index([email])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  userId       String
+  token        String   @unique
+  expiresAt    DateTime
+  userAgent    String?
+  ipAddress    String?
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt    DateTime @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
 }
 
 model Board {
