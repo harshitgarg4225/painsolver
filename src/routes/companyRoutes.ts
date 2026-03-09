@@ -86,6 +86,8 @@ const createIdeaFromTriageSchema = z.object({
 const updateTriageConfigSchema = z.object({
   source: z.enum(["freshdesk", "zoom", "slack"]),
   routingMode: z.enum(["central", "individual"]),
+  triageMode: z.enum(["auto", "manual"]).optional(),
+  spamDetectionEnabled: z.boolean().optional(),
   enabled: z.boolean(),
   similarityThreshold: z.number().min(0.5).max(0.99).optional()
 });
@@ -1119,5 +1121,537 @@ companyRoutes.get("/posts/:postId/comment-summary", async (req, res) => {
     }
   } catch {
     res.status(500).json({ error: "Failed to fetch summary" });
+  }
+});
+
+// ═══════════════════════════════════════════════
+// P1: AI Knowledge Hub - analytics + history
+// ═══════════════════════════════════════════════
+companyRoutes.get("/ai/knowledge-hub", async (_req, res) => {
+  try {
+    const [totalEvents, statusCounts, sourceCounts, recentActions, avgConfidence] = await Promise.all([
+      prisma.painEvent.count(),
+      prisma.painEvent.groupBy({
+        by: ["status"],
+        _count: { id: true },
+      }),
+      prisma.painEvent.groupBy({
+        by: ["source"],
+        _count: { id: true },
+      }),
+      prisma.aiActionLog.findMany({
+        orderBy: { createdAt: "desc" },
+        take: 50,
+        include: {
+          painEvent: {
+            select: {
+              id: true,
+              rawText: true,
+              source: true,
+              status: true,
+              matchedPostId: true,
+              matchedPost: { select: { id: true, title: true } },
+              createdAt: true,
+            },
+          },
+        },
+      }),
+      prisma.aiActionLog.aggregate({ _avg: { confidenceScore: true } }),
+    ]);
+
+    // Weekly trend: count events by week for last 12 weeks
+    const twelveWeeksAgo = new Date(Date.now() - 12 * 7 * 24 * 60 * 60 * 1000);
+    const weeklyEvents = await prisma.painEvent.findMany({
+      where: { createdAt: { gte: twelveWeeksAgo } },
+      select: { createdAt: true, status: true, source: true },
+      orderBy: { createdAt: "asc" },
+    });
+
+    const weekBuckets: Record<string, { total: number; auto_merged: number; needs_triage: number; spam: number; skipped: number }> = {};
+    weeklyEvents.forEach((e) => {
+      const weekStart = new Date(e.createdAt);
+      weekStart.setDate(weekStart.getDate() - weekStart.getDay());
+      const key = weekStart.toISOString().slice(0, 10);
+      if (!weekBuckets[key]) weekBuckets[key] = { total: 0, auto_merged: 0, needs_triage: 0, spam: 0, skipped: 0 };
+      weekBuckets[key].total++;
+      if (e.status === "auto_merged") weekBuckets[key].auto_merged++;
+      else if (e.status === "needs_triage") weekBuckets[key].needs_triage++;
+      else if (e.status === "spam") weekBuckets[key].spam++;
+      else if (e.status === "skipped") weekBuckets[key].skipped++;
+    });
+
+    const weeklyTrend = Object.entries(weekBuckets)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([week, counts]) => ({ week, ...counts }));
+
+    // Category distribution from AI metadata
+    const recentWithMeta = await prisma.aiActionLog.findMany({
+      where: { metadata: { not: Prisma.DbNull } },
+      select: { metadata: true },
+      take: 500,
+      orderBy: { createdAt: "desc" },
+    });
+
+    const categoryMap: Record<string, number> = {};
+    const sentimentMap: Record<string, number> = {};
+    const urgencyMap: Record<string, number> = {};
+    recentWithMeta.forEach((log) => {
+      const meta = log.metadata as any;
+      if (meta?.category) categoryMap[meta.category] = (categoryMap[meta.category] || 0) + 1;
+      if (meta?.sentiment) sentimentMap[meta.sentiment] = (sentimentMap[meta.sentiment] || 0) + 1;
+      if (meta?.urgency) urgencyMap[meta.urgency] = (urgencyMap[meta.urgency] || 0) + 1;
+    });
+
+    res.status(200).json({
+      totalEvents,
+      avgConfidence: avgConfidence._avg.confidenceScore ?? 0,
+      statusBreakdown: Object.fromEntries(statusCounts.map((s) => [s.status, s._count.id])),
+      sourceBreakdown: Object.fromEntries(sourceCounts.map((s) => [s.source, s._count.id])),
+      categoryDistribution: categoryMap,
+      sentimentDistribution: sentimentMap,
+      urgencyDistribution: urgencyMap,
+      weeklyTrend,
+      recentActions: recentActions.map((a) => ({
+        id: a.id,
+        action: a.actionTaken,
+        confidence: a.confidenceScore,
+        status: a.status,
+        metadata: a.metadata,
+        painEvent: a.painEvent ? {
+          id: a.painEvent.id,
+          rawText: a.painEvent.rawText.slice(0, 200),
+          source: a.painEvent.source,
+          status: a.painEvent.status,
+          matchedPostTitle: a.painEvent.matchedPost?.title ?? null,
+          createdAt: a.painEvent.createdAt.toISOString(),
+        } : null,
+        createdAt: a.createdAt.toISOString(),
+      })),
+    });
+  } catch (err: any) {
+    console.error("[knowledge-hub]", err);
+    res.status(500).json({ error: "Failed to load AI Knowledge Hub data" });
+  }
+});
+
+// ═══════════════════════════════════════════════
+// P1: Spam detection mark/unmark
+// ═══════════════════════════════════════════════
+companyRoutes.post("/triage/:painEventId/spam", async (req, res) => {
+  try {
+    await prisma.painEvent.update({
+      where: { id: req.params.painEventId },
+      data: { status: "spam" },
+    });
+    res.status(200).json({ ok: true });
+  } catch {
+    res.status(404).json({ error: "Pain event not found" });
+  }
+});
+
+companyRoutes.post("/triage/:painEventId/unspam", async (req, res) => {
+  try {
+    await prisma.painEvent.update({
+      where: { id: req.params.painEventId },
+      data: { status: "needs_triage" },
+    });
+    res.status(200).json({ ok: true });
+  } catch {
+    res.status(404).json({ error: "Pain event not found" });
+  }
+});
+
+// ═══════════════════════════════════════════════
+// P1: ClickUp Integration
+// ═══════════════════════════════════════════════
+const clickUpConnectSchema = z.object({
+  accessToken: z.string().min(1),
+});
+
+companyRoutes.post("/integrations/clickup/connect", async (req, res) => {
+  const parsed = clickUpConnectSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Access token required" });
+    return;
+  }
+
+  const companyId = (req as any).companyId || "";
+  try {
+    // Verify token by fetching teams
+    const teamsRes = await fetch("https://api.clickup.com/api/v2/team", {
+      headers: { Authorization: parsed.data.accessToken },
+    });
+    if (!teamsRes.ok) {
+      res.status(401).json({ error: "Invalid ClickUp access token" });
+      return;
+    }
+    const teamsData = await teamsRes.json() as any;
+    const team = teamsData.teams?.[0];
+
+    // Fetch spaces for first team
+    let spaceIds: string[] = [];
+    let spaceNames: string[] = [];
+    if (team) {
+      const spacesRes = await fetch(`https://api.clickup.com/api/v2/team/${team.id}/space?archived=false`, {
+        headers: { Authorization: parsed.data.accessToken },
+      });
+      if (spacesRes.ok) {
+        const spacesData = await spacesRes.json() as any;
+        spaceIds = (spacesData.spaces || []).map((s: any) => s.id);
+        spaceNames = (spacesData.spaces || []).map((s: any) => s.name);
+      }
+    }
+
+    const connection = await prisma.clickUpConnection.upsert({
+      where: { companyId },
+      update: {
+        accessToken: parsed.data.accessToken,
+        teamId: team?.id?.toString() || null,
+        teamName: team?.name || null,
+        spaceIds,
+        spaceNames,
+      },
+      create: {
+        companyId,
+        accessToken: parsed.data.accessToken,
+        teamId: team?.id?.toString() || null,
+        teamName: team?.name || null,
+        spaceIds,
+        spaceNames,
+      },
+    });
+
+    res.status(200).json({
+      connected: true,
+      teamId: connection.teamId,
+      teamName: connection.teamName,
+      spaceIds: connection.spaceIds,
+      spaceNames: connection.spaceNames,
+    });
+  } catch (err: any) {
+    console.error("[clickup-connect]", err);
+    res.status(500).json({ error: "Failed to connect ClickUp" });
+  }
+});
+
+companyRoutes.get("/integrations/clickup/status", async (req, res) => {
+  const companyId = (req as any).companyId || "";
+  try {
+    const conn = await prisma.clickUpConnection.findUnique({ where: { companyId } });
+    if (!conn) {
+      res.status(200).json({ connected: false });
+      return;
+    }
+    res.status(200).json({
+      connected: true,
+      teamId: conn.teamId,
+      teamName: conn.teamName,
+      spaceIds: conn.spaceIds,
+      spaceNames: conn.spaceNames,
+      defaultListId: conn.defaultListId,
+      defaultListName: conn.defaultListName,
+      lastSyncedAt: conn.lastSyncedAt?.toISOString() ?? null,
+    });
+  } catch {
+    res.status(500).json({ error: "Failed to fetch ClickUp status" });
+  }
+});
+
+companyRoutes.delete("/integrations/clickup/disconnect", async (req, res) => {
+  const companyId = (req as any).companyId || "";
+  try {
+    await prisma.clickUpConnection.deleteMany({ where: { companyId } });
+    res.status(200).json({ ok: true });
+  } catch {
+    res.status(500).json({ error: "Failed to disconnect ClickUp" });
+  }
+});
+
+const clickUpSetListSchema = z.object({
+  listId: z.string().min(1),
+  listName: z.string().optional(),
+});
+
+companyRoutes.patch("/integrations/clickup/default-list", async (req, res) => {
+  const parsed = clickUpSetListSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "listId required" });
+    return;
+  }
+  const companyId = (req as any).companyId || "";
+  try {
+    const conn = await prisma.clickUpConnection.update({
+      where: { companyId },
+      data: { defaultListId: parsed.data.listId, defaultListName: parsed.data.listName || null },
+    });
+    res.status(200).json({ defaultListId: conn.defaultListId, defaultListName: conn.defaultListName });
+  } catch {
+    res.status(404).json({ error: "ClickUp not connected" });
+  }
+});
+
+companyRoutes.post("/posts/:postId/clickup/push", async (req, res) => {
+  const companyId = (req as any).companyId || "";
+  try {
+    const conn = await prisma.clickUpConnection.findUnique({ where: { companyId } });
+    if (!conn || !conn.defaultListId) {
+      res.status(400).json({ error: "ClickUp not connected or no default list set" });
+      return;
+    }
+
+    // Check existing link
+    const existing = await prisma.clickUpTaskLink.findFirst({ where: { postId: req.params.postId } });
+    if (existing) {
+      res.status(200).json({ alreadyLinked: true, taskId: existing.clickUpTaskId, url: existing.clickUpUrl });
+      return;
+    }
+
+    const post = await prisma.post.findUnique({
+      where: { id: req.params.postId },
+      include: { category: { select: { name: true } }, board: { select: { name: true } } },
+    });
+    if (!post) {
+      res.status(404).json({ error: "Post not found" });
+      return;
+    }
+
+    const taskRes = await fetch(`https://api.clickup.com/api/v2/list/${conn.defaultListId}/task`, {
+      method: "POST",
+      headers: { Authorization: conn.accessToken, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: post.title,
+        description: `**PainSolver Idea**\n\n${post.description}\n\n---\nBoard: ${post.board.name}\nCategory: ${post.category.name}\nVotes: ${post.explicitVoteCount + post.implicitVoteCount}\nMRR: $${post.totalAttachedMrr}\nStatus: ${post.status}`,
+        status: post.status === "in_progress" ? "in progress" : post.status === "complete" ? "complete" : "to do",
+        tags: [{ name: "painsolver" }],
+      }),
+    });
+
+    if (!taskRes.ok) {
+      const errText = await taskRes.text();
+      res.status(502).json({ error: "ClickUp API error", details: errText });
+      return;
+    }
+
+    const taskData = await taskRes.json() as any;
+    const link = await prisma.clickUpTaskLink.create({
+      data: {
+        postId: post.id,
+        clickUpTaskId: taskData.id,
+        clickUpUrl: taskData.url,
+        clickUpStatus: taskData.status?.status || "Open",
+        lastSyncedAt: new Date(),
+      },
+    });
+
+    res.status(201).json({ taskId: link.clickUpTaskId, url: link.clickUpUrl, status: link.clickUpStatus });
+  } catch (err: any) {
+    console.error("[clickup-push]", err);
+    res.status(500).json({ error: "Failed to push to ClickUp" });
+  }
+});
+
+companyRoutes.get("/posts/:postId/clickup/status", async (req, res) => {
+  try {
+    const link = await prisma.clickUpTaskLink.findFirst({ where: { postId: req.params.postId } });
+    if (!link) {
+      res.status(200).json({ linked: false });
+      return;
+    }
+    res.status(200).json({ linked: true, taskId: link.clickUpTaskId, url: link.clickUpUrl, status: link.clickUpStatus });
+  } catch {
+    res.status(500).json({ error: "Failed to check ClickUp status" });
+  }
+});
+
+// ═══════════════════════════════════════════════
+// P1: Comment UX - like/react/pin/edit
+// ═══════════════════════════════════════════════
+companyRoutes.post("/comments/:commentId/like", async (req, res) => {
+  const userId = (req as any).actor?.userId || (req as any).authUser?.id || "";
+  if (!userId) { res.status(401).json({ error: "Must be logged in" }); return; }
+  try {
+    const comment = await prisma.comment.findUnique({ where: { id: req.params.commentId } });
+    if (!comment) { res.status(404).json({ error: "Comment not found" }); return; }
+
+    const alreadyLiked = comment.likedByUserIds.includes(userId);
+    if (alreadyLiked) {
+      // Unlike
+      await prisma.comment.update({
+        where: { id: req.params.commentId },
+        data: {
+          likedByUserIds: comment.likedByUserIds.filter((id) => id !== userId),
+          likeCount: Math.max(0, comment.likeCount - 1),
+        },
+      });
+      res.status(200).json({ liked: false, likeCount: Math.max(0, comment.likeCount - 1) });
+    } else {
+      // Like
+      await prisma.comment.update({
+        where: { id: req.params.commentId },
+        data: {
+          likedByUserIds: [...comment.likedByUserIds, userId],
+          likeCount: comment.likeCount + 1,
+        },
+      });
+      res.status(200).json({ liked: true, likeCount: comment.likeCount + 1 });
+    }
+  } catch {
+    res.status(500).json({ error: "Failed to toggle like" });
+  }
+});
+
+const reactSchema = z.object({ emoji: z.string().min(1).max(4) });
+
+companyRoutes.post("/comments/:commentId/react", async (req, res) => {
+  const parsed = reactSchema.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: "Invalid emoji" }); return; }
+  const userId = (req as any).actor?.userId || (req as any).authUser?.id || "";
+  if (!userId) { res.status(401).json({ error: "Must be logged in" }); return; }
+  try {
+    const comment = await prisma.comment.findUnique({ where: { id: req.params.commentId } });
+    if (!comment) { res.status(404).json({ error: "Comment not found" }); return; }
+
+    const reactions = (comment.reactions as Record<string, string[]>) || {};
+    const emoji = parsed.data.emoji;
+    const users = reactions[emoji] || [];
+    if (users.includes(userId)) {
+      reactions[emoji] = users.filter((id) => id !== userId);
+      if (reactions[emoji].length === 0) delete reactions[emoji];
+    } else {
+      reactions[emoji] = [...users, userId];
+    }
+
+    await prisma.comment.update({ where: { id: req.params.commentId }, data: { reactions } });
+    res.status(200).json({ reactions });
+  } catch {
+    res.status(500).json({ error: "Failed to toggle reaction" });
+  }
+});
+
+companyRoutes.post("/comments/:commentId/pin", async (req, res) => {
+  try {
+    const comment = await prisma.comment.findUnique({ where: { id: req.params.commentId } });
+    if (!comment) { res.status(404).json({ error: "Comment not found" }); return; }
+    await prisma.comment.update({ where: { id: req.params.commentId }, data: { isPinned: !comment.isPinned } });
+    res.status(200).json({ isPinned: !comment.isPinned });
+  } catch {
+    res.status(500).json({ error: "Failed to toggle pin" });
+  }
+});
+
+const editCommentSchema = z.object({ value: z.string().min(1) });
+
+companyRoutes.patch("/comments/:commentId", async (req, res) => {
+  const parsed = editCommentSchema.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: "Comment body required" }); return; }
+  try {
+    const comment = await prisma.comment.update({
+      where: { id: req.params.commentId },
+      data: { value: parsed.data.value, editedAt: new Date() },
+    });
+    res.status(200).json({ id: comment.id, value: comment.value, editedAt: comment.editedAt?.toISOString() });
+  } catch {
+    res.status(404).json({ error: "Comment not found" });
+  }
+});
+
+// ═══════════════════════════════════════════════
+// P1: Reporting with trends
+// ═══════════════════════════════════════════════
+companyRoutes.get("/reporting/trends", async (_req, res) => {
+  try {
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const ninetyDaysAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
+
+    // Daily new posts for last 30 days
+    const recentPosts = await prisma.post.findMany({
+      where: { createdAt: { gte: thirtyDaysAgo } },
+      select: { createdAt: true, status: true, totalAttachedMrr: true },
+      orderBy: { createdAt: "asc" },
+    });
+
+    const dailyPosts: Record<string, { count: number; mrr: number }> = {};
+    recentPosts.forEach((p) => {
+      const day = p.createdAt.toISOString().slice(0, 10);
+      if (!dailyPosts[day]) dailyPosts[day] = { count: 0, mrr: 0 };
+      dailyPosts[day].count++;
+      dailyPosts[day].mrr += p.totalAttachedMrr;
+    });
+
+    // Daily votes for last 30 days
+    const recentVotes = await prisma.vote.findMany({
+      where: { createdAt: { gte: thirtyDaysAgo } },
+      select: { createdAt: true, voteType: true },
+      orderBy: { createdAt: "asc" },
+    });
+
+    const dailyVotes: Record<string, { explicit: number; implicit: number }> = {};
+    recentVotes.forEach((v) => {
+      const day = v.createdAt.toISOString().slice(0, 10);
+      if (!dailyVotes[day]) dailyVotes[day] = { explicit: 0, implicit: 0 };
+      if (v.voteType === "explicit") dailyVotes[day].explicit++;
+      else dailyVotes[day].implicit++;
+    });
+
+    // Status distribution over time (monthly for 3 months)
+    const statusPosts = await prisma.post.findMany({
+      where: { createdAt: { gte: ninetyDaysAgo } },
+      select: { createdAt: true, status: true },
+    });
+
+    const monthlyStatus: Record<string, Record<string, number>> = {};
+    statusPosts.forEach((p) => {
+      const month = p.createdAt.toISOString().slice(0, 7);
+      if (!monthlyStatus[month]) monthlyStatus[month] = {};
+      monthlyStatus[month][p.status] = (monthlyStatus[month][p.status] || 0) + 1;
+    });
+
+    // Top categories by post count
+    const topCategories = await prisma.category.findMany({
+      select: { name: true, _count: { select: { posts: true } } },
+      orderBy: { posts: { _count: "desc" } },
+      take: 10,
+    });
+
+    // MRR trend
+    const mrrTrendPosts = await prisma.post.findMany({
+      where: { createdAt: { gte: ninetyDaysAgo }, totalAttachedMrr: { gt: 0 } },
+      select: { createdAt: true, totalAttachedMrr: true },
+      orderBy: { createdAt: "asc" },
+    });
+
+    const weeklyMrr: Record<string, number> = {};
+    mrrTrendPosts.forEach((p) => {
+      const week = new Date(p.createdAt);
+      week.setDate(week.getDate() - week.getDay());
+      const key = week.toISOString().slice(0, 10);
+      weeklyMrr[key] = (weeklyMrr[key] || 0) + p.totalAttachedMrr;
+    });
+
+    // Velocity: avg days from under_review to complete
+    const completedPosts = await prisma.post.findMany({
+      where: { status: { in: ["complete", "shipped"] }, statusChangedAt: { not: null } },
+      select: { createdAt: true, statusChangedAt: true },
+      take: 100,
+      orderBy: { statusChangedAt: "desc" },
+    });
+
+    const velocityDays = completedPosts
+      .filter((p) => p.statusChangedAt)
+      .map((p) => (p.statusChangedAt!.getTime() - p.createdAt.getTime()) / (1000 * 60 * 60 * 24));
+    const avgVelocity = velocityDays.length ? velocityDays.reduce((a, b) => a + b, 0) / velocityDays.length : 0;
+
+    res.status(200).json({
+      dailyPosts: Object.entries(dailyPosts).sort(([a], [b]) => a.localeCompare(b)).map(([date, d]) => ({ date, ...d })),
+      dailyVotes: Object.entries(dailyVotes).sort(([a], [b]) => a.localeCompare(b)).map(([date, d]) => ({ date, ...d })),
+      monthlyStatus: Object.entries(monthlyStatus).sort(([a], [b]) => a.localeCompare(b)).map(([month, s]) => ({ month, ...s })),
+      topCategories: topCategories.map((c) => ({ name: c.name, count: c._count.posts })),
+      weeklyMrr: Object.entries(weeklyMrr).sort(([a], [b]) => a.localeCompare(b)).map(([week, mrr]) => ({ week, mrr })),
+      avgVelocityDays: Math.round(avgVelocity * 10) / 10,
+      completedCount: completedPosts.length,
+    });
+  } catch (err: any) {
+    console.error("[reporting-trends]", err);
+    res.status(500).json({ error: "Failed to load trend data" });
   }
 });

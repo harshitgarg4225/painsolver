@@ -50,6 +50,7 @@ enum PainEventStatus {
   auto_merged
   skipped
   dismissed
+  spam
 }
 
 enum AiActionTaken {
@@ -80,6 +81,11 @@ enum NotificationType {
 enum AiInboxRoutingMode {
   central
   individual
+}
+
+enum AiTriageMode {
+  auto
+  manual
 }
 
 // ============================================
@@ -293,8 +299,10 @@ model Comment {
   isPinned         Boolean   @default(false)
   likeCount        Int       @default(0)
   likedByUserIds   String[]  @default([])
+  reactions        Json?                       // { "👍": ["userId1"], "🔥": ["userId2"] }
   replyToCommentId String?
   images           String[]  @default([])
+  editedAt         DateTime?                   // When comment was last edited
   post             Post      @relation(fields: [postId], references: [id], onDelete: Cascade)
   author           User      @relation("CommentAuthor", fields: [authorId], references: [id], onDelete: Restrict)
   replyToComment   Comment?  @relation("CommentReplies", fields: [replyToCommentId], references: [id], onDelete: SetNull)
@@ -411,6 +419,8 @@ model AiInboxConfig {
   companyId                 String             @default("")
   source                    PainEventSource
   routingMode               AiInboxRoutingMode
+  triageMode                AiTriageMode       @default(manual)   // auto = AI acts, manual = PM reviews
+  spamDetectionEnabled      Boolean            @default(true)     // Filter spam/noise automatically
   enabled                   Boolean            @default(true)
   similarityThreshold       Float              @default(0.75)
   freshdeskDomain           String?
@@ -523,6 +533,43 @@ model PortalSettings {
   company             Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
+}
+
+// ============================================
+// ClickUp Integration
+// ============================================
+model ClickUpConnection {
+  id               String   @id @default(cuid())
+  companyId        String
+  accessToken      String   @db.Text
+  teamId           String?
+  teamName         String?
+  spaceIds         String[] @default([])
+  spaceNames       String[] @default([])
+  defaultListId    String?
+  defaultListName  String?
+  webhookId        String?
+  syncEnabled      Boolean  @default(true)
+  lastSyncedAt     DateTime?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@unique([companyId])
+  @@index([companyId])
+}
+
+model ClickUpTaskLink {
+  id             String   @id @default(cuid())
+  postId         String
+  clickUpTaskId  String   @unique
+  clickUpUrl     String
+  clickUpStatus  String   @default("Open")
+  lastSyncedAt   DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([postId])
+  @@index([clickUpTaskId])
 }
 
 model UploadedFile {

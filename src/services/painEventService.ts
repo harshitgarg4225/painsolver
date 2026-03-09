@@ -10,17 +10,44 @@ import { findClosestPostByIntent } from "./vectorSearchService";
 
 export interface PainEventProcessingResult {
   painEventId: string;
-  status: "auto_merged" | "needs_triage" | "skipped";
+  status: "auto_merged" | "needs_triage" | "skipped" | "spam";
   similarityScore?: number;
   matchedPostId?: string | null;
 }
 
-async function getSimilarityThreshold(source: PainEventSource): Promise<number> {
+// Spam detection patterns
+const SPAM_PATTERNS = [
+  /^(thanks?|thank you|ok|okay|got it|noted|sure|yes|no|hi|hello|hey)\s*[.!]?\s*$/i,
+  /unsubscribe/i,
+  /\b(buy now|click here|free trial|limited offer|act now|congratulations)\b/i,
+  /\b(viagra|casino|lottery|winner|prize)\b/i,
+  /^.{0,5}$/,  // Very short messages (less than 6 chars)
+];
+
+function isLikelySpam(text: string): boolean {
+  const clean = text.replace(/\s+/g, " ").trim();
+  if (clean.length < 3) return true;
+  return SPAM_PATTERNS.some((pattern) => pattern.test(clean));
+}
+
+async function getSourceConfig(source: PainEventSource): Promise<{
+  similarityThreshold: number;
+  triageMode: string;
+  spamDetectionEnabled: boolean;
+}> {
   const config = await prisma.aiInboxConfig.findFirst({
     where: { source },
-    select: { similarityThreshold: true }
+    select: {
+      similarityThreshold: true,
+      triageMode: true,
+      spamDetectionEnabled: true,
+    }
   });
-  return config?.similarityThreshold ?? env.AI_SIMILARITY_THRESHOLD;
+  return {
+    similarityThreshold: config?.similarityThreshold ?? env.AI_SIMILARITY_THRESHOLD,
+    triageMode: config?.triageMode ?? "manual",
+    spamDetectionEnabled: config?.spamDetectionEnabled ?? true,
+  };
 }
 
 export async function processPainEvent(
@@ -48,18 +75,36 @@ export async function processPainEvent(
     };
   }
 
+  // Get source config for triage mode and spam detection
+  const sourceConfig = await getSourceConfig(painEvent.source);
+
+  // P1: Spam detection - check before AI processing
+  if (sourceConfig.spamDetectionEnabled && isLikelySpam(painEvent.rawText)) {
+    await prisma.painEvent.update({
+      where: { id: painEventId },
+      data: { status: "spam" }
+    });
+    return {
+      painEventId,
+      status: "spam",
+      similarityScore: 0
+    };
+  }
+
   const extracted = await extractIntentFromTicket(painEvent.rawText);
   
   // Skip processing if AI confidence is very low (likely noise)
   if (extracted.confidenceLevel && extracted.confidenceLevel < 0.3) {
+    // If spam detection is on and confidence is very low, mark as spam
+    const newStatus = sourceConfig.spamDetectionEnabled ? "spam" : "skipped";
     await prisma.painEvent.update({
       where: { id: painEventId },
-      data: { status: "skipped" }
+      data: { status: newStatus as any }
     });
     
     return {
       painEventId,
-      status: "skipped",
+      status: newStatus as any,
       similarityScore: 0
     };
   }
@@ -72,7 +117,8 @@ export async function processPainEvent(
   const calibratedScore = match.similarityScore * (0.5 + aiConfidence * 0.5);
 
   // Get the configured similarity threshold for this source
-  const similarityThreshold = await getSimilarityThreshold(painEvent.source);
+  const similarityThreshold = sourceConfig.similarityThreshold;
+  const isAutoMode = sourceConfig.triageMode === "auto";
 
   if (
     match.post &&
@@ -173,14 +219,17 @@ export async function processPainEvent(
     };
   }
 
+  // In auto mode: create the idea automatically without manual triage
+  const actionStatus = isAutoMode ? "approved" : "pending_review";
+  const eventStatus = isAutoMode ? "auto_merged" : "needs_triage";
+
   await prisma.$transaction(async (tx) => {
     await tx.aiActionLog.upsert({
       where: { painEventId },
       update: {
         actionTaken: "suggested_new",
         confidenceScore: calibratedScore,
-        status: "pending_review",
-        // Store enhanced metadata including suggested title/description
+        status: actionStatus,
         metadata: {
           extractedIntent: extracted.intent,
           category: extracted.category,
@@ -190,14 +239,15 @@ export async function processPainEvent(
           vectorSimilarity: match.similarityScore,
           keywords: extracted.keywords,
           suggestedTitle: extracted.suggestedTitle,
-          suggestedDescription: extracted.suggestedDescription
+          suggestedDescription: extracted.suggestedDescription,
+          autoMode: isAutoMode
         }
       },
       create: {
         painEventId,
         actionTaken: "suggested_new",
         confidenceScore: calibratedScore,
-        status: "pending_review",
+        status: actionStatus,
         metadata: {
           extractedIntent: extracted.intent,
           category: extracted.category,
@@ -207,7 +257,8 @@ export async function processPainEvent(
           vectorSimilarity: match.similarityScore,
           keywords: extracted.keywords,
           suggestedTitle: extracted.suggestedTitle,
-          suggestedDescription: extracted.suggestedDescription
+          suggestedDescription: extracted.suggestedDescription,
+          autoMode: isAutoMode
         }
       }
     });
@@ -215,7 +266,7 @@ export async function processPainEvent(
     await tx.painEvent.update({
       where: { id: painEventId },
       data: {
-        status: "needs_triage",
+        status: eventStatus as any,
         matchedPostId: match.post?.id ?? null
       }
     });
@@ -225,7 +276,7 @@ export async function processPainEvent(
 
   return {
     painEventId,
-    status: "needs_triage",
+    status: eventStatus as "auto_merged" | "needs_triage",
     similarityScore: calibratedScore,
     matchedPostId: match.post?.id ?? null
   };

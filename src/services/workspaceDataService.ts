@@ -68,6 +68,11 @@ export interface WorkspaceCommentView {
   replyToCommentId: string | null;
   replyToAuthorName: string | null;
   isPrivate: boolean;
+  isPinned: boolean;
+  likeCount: number;
+  likedByUserIds: string[];
+  reactions: Record<string, string[]> | null;
+  editedAt: string | null;
   createdAt: string;
 }
 
@@ -283,17 +288,23 @@ function dedupeSegments(segments: string[]): string[] {
 type AiInboxSourceKey = "freshdesk" | "zoom" | "slack";
 type AiInboxRoutingModeView = "central" | "individual";
 
-const AI_INBOX_DEFAULTS: Record<AiInboxSourceKey, { routingMode: AiInboxRoutingModeView; enabled: boolean }> = {
+const AI_INBOX_DEFAULTS: Record<AiInboxSourceKey, { routingMode: AiInboxRoutingModeView; triageMode: "auto" | "manual"; spamDetectionEnabled: boolean; enabled: boolean }> = {
   freshdesk: {
     routingMode: "central",
+    triageMode: "auto",
+    spamDetectionEnabled: true,
     enabled: true
   },
   zoom: {
     routingMode: "individual",
+    triageMode: "auto",
+    spamDetectionEnabled: true,
     enabled: true
   },
   slack: {
     routingMode: "central",
+    triageMode: "auto",
+    spamDetectionEnabled: true,
     enabled: true
   }
 };
@@ -334,6 +345,8 @@ const TRIAGE_STOP_WORDS = new Set([
 interface AiInboxSourceConfigView {
   source: AiInboxSourceKey;
   routingMode: AiInboxRoutingModeView;
+  triageMode: "auto" | "manual";
+  spamDetectionEnabled: boolean;
   enabled: boolean;
   similarityThreshold: number;
   updatedAt: string;
@@ -497,13 +510,13 @@ async function ensureAiInboxConfig(
     // No company yet — return defaults without persisting
     const result = {} as Record<AiInboxSourceKey, AiInboxSourceConfigView>;
     for (const [source, config] of Object.entries(AI_INBOX_DEFAULTS)) {
-      result[source as AiInboxSourceKey] = { ...config, similarityThreshold: 0.75, source: source as AiInboxSourceKey, updatedAt: new Date().toISOString() };
+      result[source as AiInboxSourceKey] = { ...config, similarityThreshold: 0.75, source: source as AiInboxSourceKey, updatedAt: new Date().toISOString(), triageMode: config.triageMode, spamDetectionEnabled: config.spamDetectionEnabled };
     }
     return result;
   }
 
   const defaults = Object.entries(AI_INBOX_DEFAULTS) as Array<
-    [AiInboxSourceKey, { routingMode: AiInboxRoutingModeView; enabled: boolean }]
+    [AiInboxSourceKey, { routingMode: AiInboxRoutingModeView; triageMode: "auto" | "manual"; spamDetectionEnabled: boolean; enabled: boolean }]
   >;
 
   await Promise.all(
@@ -534,6 +547,8 @@ async function ensureAiInboxConfig(
     freshdesk: {
       source: "freshdesk",
       routingMode: AI_INBOX_DEFAULTS.freshdesk.routingMode,
+      triageMode: "manual",
+      spamDetectionEnabled: true,
       enabled: AI_INBOX_DEFAULTS.freshdesk.enabled,
       similarityThreshold: 0.75,
       updatedAt: new Date(0).toISOString()
@@ -541,6 +556,8 @@ async function ensureAiInboxConfig(
     zoom: {
       source: "zoom",
       routingMode: AI_INBOX_DEFAULTS.zoom.routingMode,
+      triageMode: "manual",
+      spamDetectionEnabled: true,
       enabled: AI_INBOX_DEFAULTS.zoom.enabled,
       similarityThreshold: 0.75,
       updatedAt: new Date(0).toISOString()
@@ -548,6 +565,8 @@ async function ensureAiInboxConfig(
     slack: {
       source: "slack",
       routingMode: AI_INBOX_DEFAULTS.slack.routingMode,
+      triageMode: "manual",
+      spamDetectionEnabled: true,
       enabled: AI_INBOX_DEFAULTS.slack.enabled,
       similarityThreshold: 0.75,
       updatedAt: new Date(0).toISOString()
@@ -559,6 +578,8 @@ async function ensureAiInboxConfig(
     configMap[key] = {
       source: key,
       routingMode: row.routingMode as AiInboxRoutingModeView,
+      triageMode: (row as any).triageMode ?? "manual",
+      spamDetectionEnabled: (row as any).spamDetectionEnabled ?? true,
       enabled: row.enabled,
       similarityThreshold: row.similarityThreshold,
       updatedAt: row.updatedAt.toISOString()
@@ -670,6 +691,11 @@ function mapComment(comment: PostWithRelations["comments"][number]): WorkspaceCo
       ? comment.replyToComment.author.name || comment.replyToComment.author.email
       : null,
     isPrivate: comment.isPrivate,
+    isPinned: (comment as any).isPinned ?? false,
+    likeCount: (comment as any).likeCount ?? 0,
+    likedByUserIds: (comment as any).likedByUserIds ?? [],
+    reactions: (comment as any).reactions ?? null,
+    editedAt: (comment as any).editedAt ? (comment as any).editedAt.toISOString() : null,
     createdAt: comment.createdAt.toISOString()
   };
 }
@@ -2899,6 +2925,8 @@ export async function listAiInboxConfig(): Promise<{
 export async function updateAiInboxConfig(input: {
   source: AiInboxSourceKey;
   routingMode: AiInboxRoutingModeView;
+  triageMode?: "auto" | "manual";
+  spamDetectionEnabled?: boolean;
   enabled: boolean;
   similarityThreshold?: number;
   companyId?: string;
@@ -2912,13 +2940,18 @@ export async function updateAiInboxConfig(input: {
     where: { companyId: resolvedCompanyId, source: input.source as PainEventSource }
   });
 
+  const extraData: Record<string, any> = {};
+  if (input.similarityThreshold !== undefined) extraData.similarityThreshold = input.similarityThreshold;
+  if (input.triageMode !== undefined) extraData.triageMode = input.triageMode;
+  if (input.spamDetectionEnabled !== undefined) extraData.spamDetectionEnabled = input.spamDetectionEnabled;
+
   const next = existing
     ? await prisma.aiInboxConfig.update({
         where: { id: existing.id },
         data: {
           routingMode: input.routingMode as AiInboxRoutingMode,
           enabled: input.enabled,
-          ...(input.similarityThreshold !== undefined && { similarityThreshold: input.similarityThreshold })
+          ...extraData
         }
       })
     : await prisma.aiInboxConfig.create({
@@ -2927,13 +2960,17 @@ export async function updateAiInboxConfig(input: {
           source: input.source as PainEventSource,
           routingMode: input.routingMode as AiInboxRoutingMode,
           enabled: input.enabled,
-          similarityThreshold: input.similarityThreshold ?? 0.75
+          similarityThreshold: input.similarityThreshold ?? 0.75,
+          triageMode: (input.triageMode as any) ?? "manual",
+          spamDetectionEnabled: input.spamDetectionEnabled ?? true
         }
       });
 
   return {
     source: next.source as AiInboxSourceKey,
     routingMode: next.routingMode as AiInboxRoutingModeView,
+    triageMode: (next as any).triageMode ?? "manual",
+    spamDetectionEnabled: (next as any).spamDetectionEnabled ?? true,
     enabled: next.enabled,
     similarityThreshold: next.similarityThreshold,
     updatedAt: next.updatedAt.toISOString()

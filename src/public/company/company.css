@@ -3394,6 +3394,341 @@ button:active:not(:disabled) {
 .sentiment-negative { background: #fee2e2; color: #dc2626; }
 .sentiment-mixed { background: #fef3c7; color: #ca8a04; }
 
+/* ═══════════════════════════════════════════════
+   P1: Toggle Switch
+   ═══════════════════════════════════════════════ */
+.toggle-switch {
+  position: relative;
+  display: inline-block;
+  width: 42px;
+  height: 24px;
+  flex-shrink: 0;
+}
+.toggle-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+.slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background-color: var(--line);
+  transition: .3s;
+  border-radius: 24px;
+}
+.slider:before {
+  position: absolute;
+  content: "";
+  height: 18px;
+  width: 18px;
+  left: 3px;
+  bottom: 3px;
+  background-color: white;
+  transition: .3s;
+  border-radius: 50%;
+}
+input:checked + .slider {
+  background-color: var(--accent);
+}
+input:checked + .slider:before {
+  transform: translateX(18px);
+}
+.ai-setting {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+}
+.ai-setting span:first-child {
+  min-width: 140px;
+  font-weight: 500;
+}
+
+/* ═══════════════════════════════════════════════
+   P1: Spam Tag
+   ═══════════════════════════════════════════════ */
+.spam-tag {
+  background-color: #dc2626 !important;
+  color: white !important;
+}
+.triage-spam-action {
+  margin-top: 0.5rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--line);
+}
+
+/* ═══════════════════════════════════════════════
+   P1: Comment UX Upgrade
+   ═══════════════════════════════════════════════ */
+.comment.is-pinned {
+  border-left: 3px solid var(--accent);
+  background-color: color-mix(in srgb, var(--accent) 5%, var(--surface));
+}
+.comment-actions-bar {
+  display: flex;
+  gap: 0.25rem;
+  margin-top: 0.5rem;
+  flex-wrap: wrap;
+}
+.comment-actions-bar .ghost.tiny {
+  font-size: 0.75rem;
+  padding: 0.2rem 0.4rem;
+  opacity: 0.7;
+  transition: opacity 0.15s ease;
+}
+.comment-actions-bar .ghost.tiny:hover {
+  opacity: 1;
+}
+.comment-actions-bar .is-liked {
+  color: #dc2626;
+}
+.comment-reactions {
+  display: flex;
+  gap: 0.4rem;
+  margin-top: 0.5rem;
+  flex-wrap: wrap;
+}
+.reaction-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  padding: 0.2rem 0.5rem;
+  border-radius: 16px;
+  background-color: var(--surface-hover);
+  border: 1px solid var(--line);
+  color: var(--text);
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.reaction-pill:hover {
+  background-color: color-mix(in srgb, var(--accent) 10%, var(--surface));
+}
+.reaction-pill.is-reacted {
+  background-color: color-mix(in srgb, var(--accent) 15%, var(--surface));
+  border-color: var(--accent);
+}
+.pinned-tag {
+  background-color: var(--accent);
+  color: white;
+  font-size: 0.7rem;
+  padding: 0.1rem 0.4rem;
+  border-radius: 4px;
+  margin-left: 0.4rem;
+}
+.edited-tag {
+  font-size: 0.7rem;
+  color: var(--muted);
+  margin-left: 0.4rem;
+}
+.comment-images {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+  flex-wrap: wrap;
+}
+.comment-img-thumb {
+  max-height: 100px;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  cursor: pointer;
+}
+
+/* ═══════════════════════════════════════════════
+   P1: ClickUp Icon
+   ═══════════════════════════════════════════════ */
+.clickup-icon {
+  background-color: #7b68ee !important;
+}
+
+/* ═══════════════════════════════════════════════
+   P1: Knowledge Hub
+   ═══════════════════════════════════════════════ */
+.knowledge-hub-header {
+  margin-bottom: 1.5rem;
+}
+.kh-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+.kh-section {
+  margin-bottom: 1.5rem;
+}
+.kh-section h4 {
+  margin-bottom: 0.75rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+.kh-bar-chart {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.kh-bar-row {
+  display: grid;
+  grid-template-columns: 140px 1fr 40px;
+  gap: 0.5rem;
+  align-items: center;
+}
+.kh-bar-label {
+  font-size: 0.8rem;
+  text-transform: capitalize;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.kh-bar-track {
+  height: 20px;
+  background-color: var(--surface-hover);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.kh-bar-fill {
+  height: 100%;
+  background-color: var(--accent);
+  border-radius: 4px;
+  transition: width 0.3s ease;
+}
+.kh-bar-fill.kh-bar-source {
+  background-color: color-mix(in srgb, var(--accent) 70%, #00eef9);
+}
+.kh-bar-value {
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-align: right;
+}
+.kh-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+.kh-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.3rem 0.6rem;
+  border-radius: 16px;
+  background-color: var(--surface-hover);
+  border: 1px solid var(--line);
+  font-size: 0.8rem;
+}
+.kh-tag strong {
+  font-weight: 700;
+}
+.kh-trend-table {
+  overflow-x: auto;
+}
+.kh-trend-table table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8rem;
+}
+.kh-trend-table th,
+.kh-trend-table td {
+  padding: 0.4rem 0.6rem;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+}
+.kh-trend-table th {
+  font-weight: 600;
+  background-color: var(--surface-hover);
+}
+.kh-recent-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+.kh-action-item {
+  padding: 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+}
+.kh-action-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.4rem;
+}
+.kh-action-text {
+  font-size: 0.85rem;
+  color: var(--text);
+  margin-bottom: 0.25rem;
+}
+
+/* ═══════════════════════════════════════════════
+   P1: Reporting Trends
+   ═══════════════════════════════════════════════ */
+.trends-panel {
+  margin-bottom: 1.5rem;
+}
+.trends-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1rem;
+}
+.trend-card {
+  padding: 1rem;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+}
+.trend-card h4 {
+  margin-bottom: 0.75rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+.mini-bar-chart {
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: 80px;
+  padding-bottom: 16px;
+  position: relative;
+}
+.mini-bar-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+}
+.mini-bar {
+  width: 100%;
+  min-width: 4px;
+  max-width: 24px;
+  background-color: var(--accent);
+  border-radius: 2px 2px 0 0;
+  transition: height 0.3s ease;
+}
+.mini-bar-label {
+  font-size: 0.55rem;
+  color: var(--muted);
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+.velocity-stat {
+  display: flex;
+  align-items: baseline;
+  gap: 0.25rem;
+  margin-bottom: 0.5rem;
+}
+.velocity-stat strong {
+  font-size: 1.8rem;
+  font-weight: 700;
+  color: var(--accent-strong);
+}
+.velocity-stat span {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
 @keyframes fadeIn {
   from { opacity: 0; }
   to { opacity: 1; }

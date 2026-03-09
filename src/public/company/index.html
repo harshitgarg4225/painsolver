@@ -490,6 +490,10 @@
               <span class="ms">settings</span>
               <span>Configuration</span>
             </button>
+            <button class="inline-tab" data-ai-tab="knowledge-hub" type="button">
+              <span class="ms">auto_stories</span>
+              <span>Knowledge Hub</span>
+            </button>
           </div>
           <div id="ai-inbox-incoming" class="ai-inbox-view is-active">
             <div class="triage-summary" id="triage-summary">
@@ -513,6 +517,7 @@
                   <option value="needs_triage">Needs triage</option>
                   <option value="auto_merged">Merged</option>
                   <option value="dismissed">Dismissed</option>
+                  <option value="spam">Spam</option>
                   <option value="all">All</option>
                 </select>
               </label>
@@ -548,6 +553,24 @@
                   <span id="ai-threshold-value">75%</span>
                 </label>
                 <p class="setting-hint">Events above this confidence score are automatically merged. Lower = more automation, higher = more manual review.</p>
+                <label class="ai-setting">
+                  <span>AI Triage Mode</span>
+                  <div class="toggle-switch">
+                    <input type="checkbox" id="ai-triage-mode-toggle" checked />
+                    <span class="slider round"></span>
+                  </div>
+                  <span id="ai-triage-mode-label">Auto</span>
+                </label>
+                <p class="setting-hint">In Auto mode, AI automatically merges/creates ideas. In Manual mode, all events need your review.</p>
+                <label class="ai-setting">
+                  <span>Spam Detection</span>
+                  <div class="toggle-switch">
+                    <input type="checkbox" id="ai-spam-detection-toggle" checked />
+                    <span class="slider round"></span>
+                  </div>
+                  <span id="ai-spam-detection-label">Enabled</span>
+                </label>
+                <p class="setting-hint">AI filters out spam and irrelevant messages before processing.</p>
               </div>
             </div>
             <div class="integrations-grid">
@@ -643,9 +666,40 @@
                   <!-- Populated by JS -->
                 </div>
               </article>
+              <!-- ClickUp Integration Card -->
+              <article class="integration-card" id="clickup-integration-card">
+                <div class="integration-header">
+                  <div class="integration-icon clickup-icon">
+                    <span class="ms">task</span>
+                  </div>
+                  <div class="integration-title">
+                    <h4>ClickUp</h4>
+                    <span class="connection-status" id="clickup-connection-status">Not connected</span>
+                  </div>
+                </div>
+                <p class="integration-desc">Push ideas from PainSolver to ClickUp as tasks. Set a default list and push individual posts with one click.</p>
+                <div class="integration-flow">
+                  <div class="flow-step"><span class="ms">lightbulb</span> Idea created</div>
+                  <span class="flow-arrow">→</span>
+                  <div class="flow-step"><span class="ms">auto_awesome</span> PM reviews</div>
+                  <span class="flow-arrow">→</span>
+                  <div class="flow-step"><span class="ms">add_task</span> Task in ClickUp</div>
+                </div>
+                <div class="integration-config" id="clickup-config-form"></div>
+                <div class="integration-status" id="clickup-status-details"></div>
+                <div class="integration-actions" id="clickup-actions"></div>
+              </article>
             </div>
             <!-- Legacy config list for routing settings -->
             <div id="triage-config-list" class="triage-config-list" style="display:none;"></div>
+          </div>
+          <!-- Knowledge Hub View -->
+          <div id="ai-inbox-knowledge-hub" class="ai-inbox-view">
+            <div class="knowledge-hub-header">
+              <h3>AI Knowledge Hub</h3>
+              <p class="muted">Discover AI-powered insights from your customer feedback pipeline.</p>
+            </div>
+            <div id="knowledge-hub-content"></div>
           </div>
         </article>
       </section>
@@ -656,6 +710,13 @@
           <p>Track impact by MRR, inspect opportunities, and export snapshots for stakeholders.</p>
         </header>
         <div id="metrics" class="metrics"></div>
+        <article class="panel trends-panel">
+          <h2>Trends</h2>
+          <p class="muted">Track daily activity, MRR distribution, and feedback velocity over time.</p>
+          <div id="trends-content" class="trends-content">
+            <div class="trends-grid" id="trends-grid"></div>
+          </div>
+        </article>
         <article class="panel exports-panel">
           <h2>Exports</h2>
           <p class="muted">Download posts/comments snapshots for reporting and analysis.</p>

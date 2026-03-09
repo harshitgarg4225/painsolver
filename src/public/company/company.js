@@ -113,6 +113,10 @@
     reportingPosts: [],
     commentReplyTarget: null,
     changelogPreview: false,
+    knowledgeHubLoaded: false,
+    knowledgeHubData: null,
+    clickUpConnection: null,
+    trendsData: null,
     loading: {
       feedback: false,
       roadmap: false,
@@ -274,7 +278,19 @@
     exportPostsCsv: document.getElementById("export-posts-csv"),
     exportCommentsCsv: document.getElementById("export-comments-csv"),
     aiThresholdSlider: document.getElementById("ai-threshold-slider"),
-    aiThresholdValue: document.getElementById("ai-threshold-value")
+    aiThresholdValue: document.getElementById("ai-threshold-value"),
+    aiTriageModeToggle: document.getElementById("ai-triage-mode-toggle"),
+    aiTriageModeLabel: document.getElementById("ai-triage-mode-label"),
+    aiSpamDetectionToggle: document.getElementById("ai-spam-detection-toggle"),
+    aiSpamDetectionLabel: document.getElementById("ai-spam-detection-label"),
+    aiInboxKnowledgeHub: document.getElementById("ai-inbox-knowledge-hub"),
+    knowledgeHubContent: document.getElementById("knowledge-hub-content"),
+    clickUpIntegrationCard: document.getElementById("clickup-integration-card"),
+    clickUpConnectionStatus: document.getElementById("clickup-connection-status"),
+    clickUpConfigForm: document.getElementById("clickup-config-form"),
+    clickUpStatusDetails: document.getElementById("clickup-status-details"),
+    clickUpActions: document.getElementById("clickup-actions"),
+    trendsGrid: document.getElementById("trends-grid")
   };
 
   var loadingCounts = {};
@@ -1395,7 +1411,10 @@
       state.commentReplyTarget = null;
     }
 
-    // AI action buttons
+    // AI action buttons + ClickUp push
+    var clickUpBtn = (state.clickUpConnection && state.clickUpConnection.connected)
+      ? '<button class="ghost small clickup-push-btn" data-push-post-id="' + esc(post.id) + '" type="button"><span class="ms">add_task</span> Push to ClickUp</button>'
+      : '';
     var aiButtonsHtml =
       '<div class="detail-ai-actions">' +
       '<button class="ghost small ai-smart-reply-btn" data-post-id="' + esc(post.id) + '" type="button">' +
@@ -1404,6 +1423,7 @@
       '<button class="ghost small ai-summary-btn" data-post-id="' + esc(post.id) + '" type="button">' +
       '<span class="ms">summarize</span> Summarize' +
       '</button>' +
+      clickUpBtn +
       '</div>';
 
     // Comment summary cache display
@@ -1429,19 +1449,58 @@
               ? '<p class="reply-to">Replying to ' + esc(comment.replyToAuthorName) + '</p>'
               : "";
 
+            // P1: Images
+            var imagesHtml = (comment.images && comment.images.length)
+              ? '<div class="comment-images">' + comment.images.map(function (url) {
+                  return '<img src="' + esc(url) + '" alt="attachment" loading="lazy" class="comment-img-thumb" />';
+                }).join("") + '</div>'
+              : "";
+
+            // P1: Reactions
+            var reactions = comment.reactions || {};
+            var reactKeys = Object.keys(reactions);
+            var reactionsHtml = reactKeys.length
+              ? '<div class="comment-reactions">' + reactKeys.map(function (emoji) {
+                  var users = reactions[emoji] || [];
+                  var myId = state.authUser ? state.authUser.id : "";
+                  var isReacted = users.indexOf(myId) !== -1;
+                  return '<button class="reaction-pill' + (isReacted ? ' is-reacted' : '') + '" data-react-comment="' + esc(comment.id) + '" data-react-emoji="' + esc(emoji) + '" type="button">' + esc(emoji) + ' ' + esc(users.length) + '</button>';
+                }).join("") + '</div>'
+              : "";
+
+            // P1: Pinned badge
+            var pinnedHtml = comment.isPinned
+              ? '<span class="tag-pill pinned-tag"><span class="ms">push_pin</span> Pinned</span>'
+              : "";
+
+            // P1: Edited badge
+            var editedHtml = comment.editedAt
+              ? '<span class="muted edited-tag">(edited ' + esc(timeAgo(comment.editedAt)) + ')</span>'
+              : "";
+
+            // P1: Like button
+            var myId = state.authUser ? state.authUser.id : "";
+            var isLiked = (comment.likedByUserIds || []).indexOf(myId) !== -1;
+            var likeCount = comment.likeCount || 0;
+
             return (
-              '<article class="comment">' +
+              '<article class="comment' + (comment.isPrivate ? ' is-private' : '') + (comment.isPinned ? ' is-pinned' : '') + '">' +
               '<div class="comment-head">' +
               '<strong>' + esc(comment.authorName) + '</strong>' +
+              pinnedHtml + editedHtml +
               '<span>' + esc(fullDate(comment.createdAt)) + '</span>' +
               '</div>' +
               replyToHtml +
               '<p>' + esc(comment.body) + '</p>' +
-              '<button class="ghost small reply-btn" data-reply-comment-id="' +
-              esc(comment.id) +
-              '" data-reply-author="' +
-              esc(comment.authorName) +
-              '" type="button">Reply</button>' +
+              imagesHtml +
+              reactionsHtml +
+              '<div class="comment-actions-bar">' +
+              '<button class="ghost tiny reply-btn" data-reply-comment-id="' + esc(comment.id) + '" data-reply-author="' + esc(comment.authorName) + '" type="button"><span class="ms">reply</span> Reply</button>' +
+              '<button class="ghost tiny like-btn' + (isLiked ? ' is-liked' : '') + '" data-like-comment="' + esc(comment.id) + '" type="button"><span class="ms">' + (isLiked ? 'favorite' : 'favorite_border') + '</span> ' + esc(likeCount) + '</button>' +
+              '<button class="ghost tiny react-btn" data-add-react-comment="' + esc(comment.id) + '" type="button"><span class="ms">add_reaction</span></button>' +
+              '<button class="ghost tiny pin-btn" data-pin-comment="' + esc(comment.id) + '" type="button"><span class="ms">' + (comment.isPinned ? 'push_pin' : 'push_pin') + '</span> ' + (comment.isPinned ? 'Unpin' : 'Pin') + '</button>' +
+              '<button class="ghost tiny edit-btn" data-edit-comment="' + esc(comment.id) + '" data-edit-body="' + esc(comment.body) + '" type="button"><span class="ms">edit</span> Edit</button>' +
+              '</div>' +
               '</article>'
             );
           })
@@ -1993,6 +2052,12 @@
     if (el.aiInboxConfiguration) {
       el.aiInboxConfiguration.classList.toggle("is-active", state.aiInboxTab === "configuration");
     }
+    if (el.aiInboxKnowledgeHub) {
+      el.aiInboxKnowledgeHub.classList.toggle("is-active", state.aiInboxTab === "knowledge-hub");
+      if (state.aiInboxTab === "knowledge-hub" && !state.knowledgeHubLoaded) {
+        loadKnowledgeHub();
+      }
+    }
   }
 
   function normalizeAiInboxConfig(rawConfig) {
@@ -2040,6 +2105,9 @@
     }
     if (status === "skipped") {
       return "Skipped";
+    }
+    if (status === "spam") {
+      return "Spam";
     }
     return "Needs triage";
   }
@@ -2670,6 +2738,16 @@
                 : "Confidence " + Math.round(Number(event.confidenceScore) * 100) + "%";
             var mergedBadge = event.status === "auto_merged" && event.suggestedPostTitle ? "Merged to " + event.suggestedPostTitle : "";
 
+            // P1: Spam badge
+            var spamBadge = event.isSpam
+              ? '<span class="tag-pill spam-tag"><span class="ms">block</span> SPAM (' + esc(Math.round((event.spamConfidence || 0) * 100)) + '%)</span>'
+              : '';
+            var spamActions = event.status === "spam"
+              ? '<button class="ghost small" data-unspam-id="' + esc(event.id) + '" type="button">Not Spam</button>'
+              : (event.status !== "auto_merged" && event.status !== "dismissed"
+                ? '<button class="ghost small spam-mark-btn" data-spam-id="' + esc(event.id) + '" type="button"><span class="ms">block</span> Mark Spam</button>'
+                : '');
+
             // Enhanced AI metadata from aiActionLog
             var aiMeta = (event.aiActionLog && event.aiActionLog.metadata) || {};
             var sentimentIcon = {
@@ -2716,7 +2794,8 @@
               '">' +
               esc(triageStatusLabel(event.status)) +
               "</span>" +
-              (event.status !== "auto_merged" && event.status !== "dismissed" 
+              spamBadge +
+              (event.status !== "auto_merged" && event.status !== "dismissed" && event.status !== "spam"
                 ? '<button class="ghost small dismiss-btn" data-dismiss-id="' + esc(event.id) + '" type="button" title="Dismiss this item"><span class="ms">close</span></button>'
                 : "") +
               "</div>" +
@@ -2772,6 +2851,7 @@
               ">Create New Idea</button>" +
               "</div>" +
               "</section>" +
+              '<div class="triage-spam-action">' + spamActions + '</div>' +
               "</div>" +
               "</article>"
             );
@@ -2847,6 +2927,250 @@
           })
           .join("")
       : renderStateCard("empty", "No opportunities found", "Opportunity scoring will appear as data grows.");
+
+    // Load trends when reporting tab is shown
+    loadTrends();
+  }
+
+  // ═══════════════════════════════════════════════
+  // P1: AI Knowledge Hub
+  // ═══════════════════════════════════════════════
+  function loadKnowledgeHub() {
+    if (!el.knowledgeHubContent) return;
+    el.knowledgeHubContent.innerHTML = renderStateCard("loading", "Loading Knowledge Hub", "Analyzing your AI pipeline data...");
+    request("/api/company/ai/knowledge-hub")
+      .then(function (data) {
+        state.knowledgeHubLoaded = true;
+        state.knowledgeHubData = data;
+        renderKnowledgeHub();
+      })
+      .catch(function (err) {
+        el.knowledgeHubContent.innerHTML = renderStateCard("error", err.message || "Failed to load Knowledge Hub", "Try again later.");
+      });
+  }
+
+  function renderKnowledgeHub() {
+    if (!el.knowledgeHubContent || !state.knowledgeHubData) return;
+    var d = state.knowledgeHubData;
+
+    var summaryCards =
+      '<div class="kh-summary-grid">' +
+      '<article class="metric-card"><h3>Total Events</h3><strong>' + esc(d.totalEvents || 0) + '</strong></article>' +
+      '<article class="metric-card"><h3>Avg Confidence</h3><strong>' + esc(Math.round((d.avgConfidence || 0) * 100)) + '%</strong></article>' +
+      '</div>';
+
+    // Status breakdown
+    var statusBreakdown = d.statusBreakdown || {};
+    var statusHtml = '<div class="kh-section"><h4>Status Breakdown</h4><div class="kh-bar-chart">' +
+      Object.keys(statusBreakdown).map(function (key) {
+        var val = statusBreakdown[key] || 0;
+        var pct = d.totalEvents ? Math.round((val / d.totalEvents) * 100) : 0;
+        return '<div class="kh-bar-row">' +
+          '<span class="kh-bar-label">' + esc(key.replace(/_/g, " ")) + '</span>' +
+          '<div class="kh-bar-track"><div class="kh-bar-fill" style="width:' + pct + '%"></div></div>' +
+          '<span class="kh-bar-value">' + esc(val) + '</span></div>';
+      }).join("") + '</div></div>';
+
+    // Source breakdown
+    var sourceBreakdown = d.sourceBreakdown || {};
+    var sourceHtml = '<div class="kh-section"><h4>Source Distribution</h4><div class="kh-bar-chart">' +
+      Object.keys(sourceBreakdown).map(function (key) {
+        var val = sourceBreakdown[key] || 0;
+        var pct = d.totalEvents ? Math.round((val / d.totalEvents) * 100) : 0;
+        return '<div class="kh-bar-row">' +
+          '<span class="kh-bar-label">' + esc(key) + '</span>' +
+          '<div class="kh-bar-track"><div class="kh-bar-fill kh-bar-source" style="width:' + pct + '%"></div></div>' +
+          '<span class="kh-bar-value">' + esc(val) + '</span></div>';
+      }).join("") + '</div></div>';
+
+    // Category distribution
+    var catDist = d.categoryDistribution || {};
+    var catKeys = Object.keys(catDist).sort(function (a, b) { return catDist[b] - catDist[a]; });
+    var catHtml = catKeys.length
+      ? '<div class="kh-section"><h4>Top Categories</h4><div class="kh-tags">' +
+        catKeys.slice(0, 10).map(function (k) {
+          return '<span class="kh-tag">' + esc(k) + ' <strong>' + esc(catDist[k]) + '</strong></span>';
+        }).join("") + '</div></div>'
+      : '';
+
+    // Sentiment distribution
+    var sentDist = d.sentimentDistribution || {};
+    var sentIcons = { frustrated: "😤", neutral: "😐", positive: "😊" };
+    var sentHtml = Object.keys(sentDist).length
+      ? '<div class="kh-section"><h4>Sentiment</h4><div class="kh-tags">' +
+        Object.keys(sentDist).map(function (k) {
+          return '<span class="kh-tag">' + (sentIcons[k] || '') + ' ' + esc(k) + ' <strong>' + esc(sentDist[k]) + '</strong></span>';
+        }).join("") + '</div></div>'
+      : '';
+
+    // Weekly trend
+    var weeklyTrend = d.weeklyTrend || [];
+    var weeklyHtml = weeklyTrend.length
+      ? '<div class="kh-section"><h4>Weekly Trend (last 12 weeks)</h4><div class="kh-trend-table"><table>' +
+        '<thead><tr><th>Week</th><th>Total</th><th>Auto-merged</th><th>Needs Triage</th><th>Spam</th></tr></thead><tbody>' +
+        weeklyTrend.map(function (w) {
+          return '<tr><td>' + esc(w.week) + '</td><td>' + esc(w.total) + '</td><td>' + esc(w.auto_merged) + '</td><td>' + esc(w.needs_triage) + '</td><td>' + esc(w.spam || 0) + '</td></tr>';
+        }).join("") +
+        '</tbody></table></div></div>'
+      : '';
+
+    // Recent AI actions
+    var recentActions = d.recentActions || [];
+    var recentHtml = recentActions.length
+      ? '<div class="kh-section"><h4>Recent AI Actions</h4><div class="kh-recent-list">' +
+        recentActions.slice(0, 15).map(function (a) {
+          var meta = a.metadata || {};
+          return '<article class="kh-action-item">' +
+            '<div class="kh-action-head">' +
+            '<span class="tag-pill">' + esc(a.action) + '</span>' +
+            '<span class="muted">' + esc(Math.round((a.confidence || 0) * 100)) + '% confidence</span>' +
+            '<span class="muted">' + esc(timeAgo(a.createdAt)) + '</span>' +
+            '</div>' +
+            (a.painEvent ? '<p class="kh-action-text">' + esc((a.painEvent.rawText || "").slice(0, 150)) + '</p>' : '') +
+            (a.painEvent && a.painEvent.matchedPostTitle ? '<p class="muted">→ ' + esc(a.painEvent.matchedPostTitle) + '</p>' : '') +
+            (meta.category ? '<span class="ai-badge">' + esc(meta.category) + '</span>' : '') +
+            (meta.sentiment ? '<span class="ai-badge">' + esc(meta.sentiment) + '</span>' : '') +
+            '</article>';
+        }).join("") +
+        '</div></div>'
+      : '';
+
+    el.knowledgeHubContent.innerHTML = summaryCards + statusHtml + sourceHtml + catHtml + sentHtml + weeklyHtml + recentHtml;
+  }
+
+  // ═══════════════════════════════════════════════
+  // P1: ClickUp Integration UI
+  // ═══════════════════════════════════════════════
+  function loadClickUpStatus() {
+    request("/api/company/integrations/clickup/status")
+      .then(function (data) {
+        state.clickUpConnection = data;
+        renderClickUpCard();
+      })
+      .catch(function () {
+        state.clickUpConnection = { connected: false };
+        renderClickUpCard();
+      });
+  }
+
+  function renderClickUpCard() {
+    if (!el.clickUpConnectionStatus || !el.clickUpActions) return;
+    var conn = state.clickUpConnection || { connected: false };
+
+    if (conn.connected) {
+      el.clickUpConnectionStatus.textContent = "Connected";
+      el.clickUpConnectionStatus.classList.add("is-connected");
+      var spacesInfo = (conn.spaceNames || []).join(", ") || "No spaces";
+      el.clickUpStatusDetails.innerHTML =
+        '<p class="muted">' +
+        '<strong>Team:</strong> ' + esc(conn.teamName || "Unknown") +
+        ' • <strong>Spaces:</strong> ' + esc(spacesInfo) +
+        (conn.defaultListName ? ' • <strong>Default list:</strong> ' + esc(conn.defaultListName) : '') +
+        (conn.lastSyncedAt ? ' • Last synced: ' + esc(timeAgo(conn.lastSyncedAt)) : '') +
+        '</p>';
+
+      el.clickUpConfigForm.innerHTML =
+        '<div class="triage-config-grid">' +
+        '<label>Default List ID<input type="text" id="clickup-default-list-id" value="' + esc(conn.defaultListId || '') + '" placeholder="e.g., 901234567" /></label>' +
+        '<label>List Name<input type="text" id="clickup-default-list-name" value="' + esc(conn.defaultListName || '') + '" placeholder="e.g., Feature Requests" /></label>' +
+        '</div>';
+
+      el.clickUpActions.innerHTML =
+        '<button class="primary small" id="clickup-save-list" type="button">Save Default List</button>' +
+        '<button class="ghost small" id="clickup-disconnect" type="button">Disconnect</button>';
+    } else {
+      el.clickUpConnectionStatus.textContent = "Not connected";
+      el.clickUpConnectionStatus.classList.remove("is-connected");
+      el.clickUpStatusDetails.innerHTML = '';
+      el.clickUpConfigForm.innerHTML =
+        '<div class="triage-config-grid">' +
+        '<label>ClickUp API Token<input type="password" id="clickup-access-token" placeholder="pk_..." /></label>' +
+        '</div>';
+      el.clickUpActions.innerHTML =
+        '<button class="primary small" id="clickup-connect-btn" type="button">Connect ClickUp</button>';
+    }
+  }
+
+  // ═══════════════════════════════════════════════
+  // P1: Reporting Trends
+  // ═══════════════════════════════════════════════
+  function loadTrends() {
+    if (!el.trendsGrid || state.trendsData) return;
+    el.trendsGrid.innerHTML = renderStateCard("loading", "Loading trend data", "Analyzing recent activity...");
+    request("/api/company/reporting/trends")
+      .then(function (data) {
+        state.trendsData = data;
+        renderTrends();
+      })
+      .catch(function (err) {
+        el.trendsGrid.innerHTML = renderStateCard("error", err.message || "Failed to load trends", "Try refreshing.");
+      });
+  }
+
+  function renderTrends() {
+    if (!el.trendsGrid || !state.trendsData) return;
+    var d = state.trendsData;
+
+    // Daily posts sparkline
+    var dailyPosts = d.dailyPosts || [];
+    var dailyPostsHtml = dailyPosts.length
+      ? '<div class="trend-card"><h4>Daily New Posts (30d)</h4><div class="trend-mini-chart">' +
+        renderMiniBarChart(dailyPosts.map(function (dp) { return { label: dp.date.slice(5), value: dp.count }; })) +
+        '</div></div>'
+      : '';
+
+    // Daily votes
+    var dailyVotes = d.dailyVotes || [];
+    var dailyVotesHtml = dailyVotes.length
+      ? '<div class="trend-card"><h4>Daily Votes (30d)</h4><div class="trend-mini-chart">' +
+        renderMiniBarChart(dailyVotes.map(function (dv) { return { label: dv.date.slice(5), value: dv.explicit + dv.implicit }; })) +
+        '</div></div>'
+      : '';
+
+    // Weekly MRR
+    var weeklyMrr = d.weeklyMrr || [];
+    var weeklyMrrHtml = weeklyMrr.length
+      ? '<div class="trend-card"><h4>Weekly MRR Attached (90d)</h4><div class="trend-mini-chart">' +
+        renderMiniBarChart(weeklyMrr.map(function (wm) { return { label: wm.week.slice(5), value: wm.mrr }; }), true) +
+        '</div></div>'
+      : '';
+
+    // Top categories
+    var topCategories = d.topCategories || [];
+    var catHtml = topCategories.length
+      ? '<div class="trend-card"><h4>Top Categories</h4><div class="kh-bar-chart">' +
+        topCategories.map(function (c) {
+          var maxCount = topCategories[0].count || 1;
+          var pct = Math.round((c.count / maxCount) * 100);
+          return '<div class="kh-bar-row"><span class="kh-bar-label">' + esc(c.name) + '</span>' +
+            '<div class="kh-bar-track"><div class="kh-bar-fill" style="width:' + pct + '%"></div></div>' +
+            '<span class="kh-bar-value">' + esc(c.count) + '</span></div>';
+        }).join("") + '</div></div>'
+      : '';
+
+    // Velocity
+    var velocityHtml = '<div class="trend-card"><h4>Completion Velocity</h4>' +
+      '<div class="velocity-stat">' +
+      '<strong>' + esc(d.avgVelocityDays || 0) + '</strong><span> avg days to complete</span>' +
+      '</div>' +
+      '<p class="muted">' + esc(d.completedCount || 0) + ' posts completed recently</p>' +
+      '</div>';
+
+    el.trendsGrid.innerHTML = dailyPostsHtml + dailyVotesHtml + weeklyMrrHtml + catHtml + velocityHtml;
+  }
+
+  function renderMiniBarChart(dataPoints, isCurrency) {
+    if (!dataPoints || !dataPoints.length) return '<p class="muted">No data</p>';
+    var maxVal = Math.max.apply(null, dataPoints.map(function (dp) { return dp.value; })) || 1;
+    return '<div class="mini-bar-chart">' +
+      dataPoints.map(function (dp) {
+        var height = Math.max(2, Math.round((dp.value / maxVal) * 60));
+        var display = isCurrency ? currency(dp.value) : String(dp.value);
+        return '<div class="mini-bar-col" title="' + esc(dp.label) + ': ' + esc(display) + '">' +
+          '<div class="mini-bar" style="height:' + height + 'px"></div>' +
+          '<span class="mini-bar-label">' + esc(dp.label) + '</span>' +
+          '</div>';
+      }).join("") + '</div>';
   }
 
   function renderCustomerView() {
@@ -3743,7 +4067,17 @@
 
     if (tab === "autopilot") {
       renderAiInboxViews();
-      void Promise.all([loadTriage(), loadZoomConnectionStatus(), loadFreshdeskStatus(), loadSlackConnectionStatus()]);
+      void Promise.all([loadTriage(), loadZoomConnectionStatus(), loadFreshdeskStatus(), loadSlackConnectionStatus(), loadClickUpStatus()]);
+      // Sync toggle state from config
+      var freshConfig = (state.triageConfig || []).find(function (c) { return c && c.source === "freshdesk"; });
+      if (freshConfig && el.aiTriageModeToggle) {
+        el.aiTriageModeToggle.checked = freshConfig.triageMode === "auto";
+        if (el.aiTriageModeLabel) el.aiTriageModeLabel.textContent = freshConfig.triageMode === "auto" ? "Auto" : "Manual";
+      }
+      if (freshConfig && el.aiSpamDetectionToggle) {
+        el.aiSpamDetectionToggle.checked = freshConfig.spamDetectionEnabled !== false;
+        if (el.aiSpamDetectionLabel) el.aiSpamDetectionLabel.textContent = freshConfig.spamDetectionEnabled !== false ? "Enabled" : "Disabled";
+      }
     }
 
     if (tab === "reporting") {
@@ -4522,6 +4856,30 @@
             });
           return;
         }
+
+        // P1: Push to ClickUp
+        var pushClickUpBtn = target.closest(".clickup-push-btn");
+        if (pushClickUpBtn) {
+          var cuPostId = pushClickUpBtn.getAttribute("data-push-post-id");
+          if (!cuPostId) return;
+          pushClickUpBtn.disabled = true;
+          pushClickUpBtn.innerHTML = '<span class="ms">hourglass_empty</span> Pushing...';
+          request("/api/company/posts/" + cuPostId + "/clickup/push", { method: "POST" })
+            .then(function (data) {
+              if (data.alreadyLinked) {
+                pushToast("info", "Already linked to ClickUp task.");
+              } else {
+                pushToast("success", "Task created in ClickUp!");
+              }
+              if (data.url) window.open(data.url, "_blank");
+            })
+            .catch(function (err) { pushToast("error", err.message || "Failed to push to ClickUp."); })
+            .finally(function () {
+              pushClickUpBtn.disabled = false;
+              pushClickUpBtn.innerHTML = '<span class="ms">add_task</span> Push to ClickUp';
+            });
+          return;
+        }
       });
     }
 
@@ -4578,23 +4936,83 @@
       }
 
       var replyBtn = target.closest(".reply-btn");
-
-      if (!replyBtn) {
+      if (replyBtn) {
+        var author = replyBtn.getAttribute("data-reply-author");
+        var commentId = replyBtn.getAttribute("data-reply-comment-id");
+        if (author && commentId) {
+          state.commentReplyTarget = {
+            commentId: commentId,
+            authorName: author
+          };
+          renderCommentReplyContext();
+          el.newComment.focus();
+        }
         return;
       }
 
-      var author = replyBtn.getAttribute("data-reply-author");
-      var commentId = replyBtn.getAttribute("data-reply-comment-id");
-      if (!author || !commentId) {
+      // P1: Like comment
+      var likeBtn = target.closest("[data-like-comment]");
+      if (likeBtn) {
+        var cId = likeBtn.getAttribute("data-like-comment");
+        request("/api/company/comments/" + cId + "/like", { method: "POST" })
+          .then(function () { if (state.selectedPostId) loadDetail(state.selectedPostId); })
+          .catch(function (err) { pushToast("error", err.message || "Failed to toggle like."); });
         return;
       }
 
-      state.commentReplyTarget = {
-        commentId: commentId,
-        authorName: author
-      };
-      renderCommentReplyContext();
-      el.newComment.focus();
+      // P1: Toggle reaction
+      var reactPill = target.closest("[data-react-comment][data-react-emoji]");
+      if (reactPill) {
+        var cId = reactPill.getAttribute("data-react-comment");
+        var emoji = reactPill.getAttribute("data-react-emoji");
+        request("/api/company/comments/" + cId + "/react", { method: "POST", body: { emoji: emoji } })
+          .then(function () { if (state.selectedPostId) loadDetail(state.selectedPostId); })
+          .catch(function (err) { pushToast("error", err.message || "Failed to toggle reaction."); });
+        return;
+      }
+
+      // P1: Add new reaction
+      var addReactBtn = target.closest("[data-add-react-comment]");
+      if (addReactBtn) {
+        var cId = addReactBtn.getAttribute("data-add-react-comment");
+        var emoji = prompt("Enter emoji (e.g., 👍, ❤️, 🎉, 🚀):");
+        if (emoji && emoji.trim()) {
+          request("/api/company/comments/" + cId + "/react", { method: "POST", body: { emoji: emoji.trim() } })
+            .then(function () { if (state.selectedPostId) loadDetail(state.selectedPostId); })
+            .catch(function (err) { pushToast("error", err.message || "Failed to add reaction."); });
+        }
+        return;
+      }
+
+      // P1: Pin comment
+      var pinBtn = target.closest("[data-pin-comment]");
+      if (pinBtn) {
+        var cId = pinBtn.getAttribute("data-pin-comment");
+        request("/api/company/comments/" + cId + "/pin", { method: "POST" })
+          .then(function (data) {
+            pushToast("success", data.isPinned ? "Comment pinned." : "Comment unpinned.");
+            if (state.selectedPostId) loadDetail(state.selectedPostId);
+          })
+          .catch(function (err) { pushToast("error", err.message || "Failed to toggle pin."); });
+        return;
+      }
+
+      // P1: Edit comment
+      var editBtn = target.closest("[data-edit-comment]");
+      if (editBtn) {
+        var cId = editBtn.getAttribute("data-edit-comment");
+        var oldBody = editBtn.getAttribute("data-edit-body") || "";
+        var newBody = prompt("Edit comment:", oldBody);
+        if (newBody !== null && newBody.trim() && newBody.trim() !== oldBody) {
+          request("/api/company/comments/" + cId, { method: "PATCH", body: { value: newBody.trim() } })
+            .then(function () {
+              pushToast("success", "Comment updated.");
+              if (state.selectedPostId) loadDetail(state.selectedPostId);
+            })
+            .catch(function (err) { pushToast("error", err.message || "Failed to edit comment."); });
+        }
+        return;
+      }
     });
 
     el.commentReplyContext.addEventListener("click", function (event) {
@@ -5175,6 +5593,36 @@
                 setButtonBusy(dismissButton, false);
               }
             });
+          return;
+        }
+
+        // P1: Mark as spam
+        var spamButton = target.closest("[data-spam-id]");
+        var spamId = spamButton ? spamButton.getAttribute("data-spam-id") : null;
+        if (spamId) {
+          if (spamButton instanceof HTMLButtonElement) setButtonBusy(spamButton, true, "...");
+          request("/api/company/triage/" + encodeURIComponent(spamId) + "/spam", { method: "POST" })
+            .then(function () {
+              pushToast("success", "Marked as spam.");
+              return loadTriage();
+            })
+            .catch(function (err) { pushToast("error", err.message || "Failed to mark spam."); })
+            .finally(function () { if (spamButton instanceof HTMLButtonElement) setButtonBusy(spamButton, false); });
+          return;
+        }
+
+        // P1: Unmark spam
+        var unspamButton = target.closest("[data-unspam-id]");
+        var unspamId = unspamButton ? unspamButton.getAttribute("data-unspam-id") : null;
+        if (unspamId) {
+          if (unspamButton instanceof HTMLButtonElement) setButtonBusy(unspamButton, true, "...");
+          request("/api/company/triage/" + encodeURIComponent(unspamId) + "/unspam", { method: "POST" })
+            .then(function () {
+              pushToast("success", "Removed spam flag.");
+              return loadTriage();
+            })
+            .catch(function (err) { pushToast("error", err.message || "Failed to remove spam flag."); })
+            .finally(function () { if (unspamButton instanceof HTMLButtonElement) setButtonBusy(unspamButton, false); });
           return;
         }
 
@@ -6157,6 +6605,127 @@
               pushToast("error", error.message || "Failed to save threshold.");
             });
         }, 500);
+      });
+    }
+
+    // ===========================
+    // P1: AI Triage Mode Toggle
+    // ===========================
+    if (el.aiTriageModeToggle) {
+      el.aiTriageModeToggle.addEventListener("change", function () {
+        var newMode = el.aiTriageModeToggle.checked ? "auto" : "manual";
+        el.aiTriageModeLabel.textContent = newMode === "auto" ? "Auto" : "Manual";
+        // Save to all sources
+        var sources = ["freshdesk", "zoom", "slack"];
+        sources.forEach(function (src) {
+          var config = (state.triageConfig || []).find(function (c) { return c && c.source === src; }) || {};
+          request("/api/company/triage/config", {
+            method: "PATCH",
+            body: {
+              source: src,
+              routingMode: config.routingMode || "central",
+              enabled: config.enabled !== false,
+              triageMode: newMode,
+              spamDetectionEnabled: config.spamDetectionEnabled !== false
+            }
+          }).catch(function () {});
+        });
+        pushToast("success", "AI triage mode set to " + newMode + ".");
+      });
+    }
+
+    // P1: Spam Detection Toggle
+    if (el.aiSpamDetectionToggle) {
+      el.aiSpamDetectionToggle.addEventListener("change", function () {
+        var enabled = el.aiSpamDetectionToggle.checked;
+        el.aiSpamDetectionLabel.textContent = enabled ? "Enabled" : "Disabled";
+        var sources = ["freshdesk", "zoom", "slack"];
+        sources.forEach(function (src) {
+          var config = (state.triageConfig || []).find(function (c) { return c && c.source === src; }) || {};
+          request("/api/company/triage/config", {
+            method: "PATCH",
+            body: {
+              source: src,
+              routingMode: config.routingMode || "central",
+              enabled: config.enabled !== false,
+              spamDetectionEnabled: enabled
+            }
+          }).catch(function () {});
+        });
+        pushToast("success", "Spam detection " + (enabled ? "enabled" : "disabled") + ".");
+      });
+    }
+
+    // ===========================
+    // P1: ClickUp Integration Handlers
+    // ===========================
+    if (el.clickUpIntegrationCard) {
+      el.clickUpIntegrationCard.addEventListener("click", function (event) {
+        var target = event.target;
+        if (!(target instanceof HTMLElement)) return;
+
+        // Connect ClickUp
+        var connectBtn = target.closest("#clickup-connect-btn");
+        if (connectBtn) {
+          var tokenInput = document.getElementById("clickup-access-token");
+          if (!tokenInput || !tokenInput.value.trim()) {
+            pushToast("warning", "Enter your ClickUp API token first.");
+            return;
+          }
+          if (connectBtn instanceof HTMLButtonElement) setButtonBusy(connectBtn, true, "Connecting...");
+          request("/api/company/integrations/clickup/connect", {
+            method: "POST",
+            body: { accessToken: tokenInput.value.trim() }
+          })
+            .then(function (data) {
+              state.clickUpConnection = data;
+              pushToast("success", "ClickUp connected to " + (data.teamName || "workspace") + "!");
+              renderClickUpCard();
+            })
+            .catch(function (err) { pushToast("error", err.message || "Failed to connect ClickUp."); })
+            .finally(function () { if (connectBtn instanceof HTMLButtonElement) setButtonBusy(connectBtn, false); });
+          return;
+        }
+
+        // Save default list
+        var saveListBtn = target.closest("#clickup-save-list");
+        if (saveListBtn) {
+          var listIdInput = document.getElementById("clickup-default-list-id");
+          var listNameInput = document.getElementById("clickup-default-list-name");
+          if (!listIdInput || !listIdInput.value.trim()) {
+            pushToast("warning", "Enter a ClickUp list ID.");
+            return;
+          }
+          if (saveListBtn instanceof HTMLButtonElement) setButtonBusy(saveListBtn, true, "Saving...");
+          request("/api/company/integrations/clickup/default-list", {
+            method: "PATCH",
+            body: { listId: listIdInput.value.trim(), listName: (listNameInput && listNameInput.value.trim()) || undefined }
+          })
+            .then(function (data) {
+              state.clickUpConnection = Object.assign(state.clickUpConnection || {}, data);
+              pushToast("success", "Default ClickUp list saved.");
+              renderClickUpCard();
+            })
+            .catch(function (err) { pushToast("error", err.message || "Failed to save default list."); })
+            .finally(function () { if (saveListBtn instanceof HTMLButtonElement) setButtonBusy(saveListBtn, false); });
+          return;
+        }
+
+        // Disconnect
+        var disconnectBtn = target.closest("#clickup-disconnect");
+        if (disconnectBtn) {
+          if (!confirm("Disconnect ClickUp?")) return;
+          if (disconnectBtn instanceof HTMLButtonElement) setButtonBusy(disconnectBtn, true, "Disconnecting...");
+          request("/api/company/integrations/clickup/disconnect", { method: "DELETE" })
+            .then(function () {
+              state.clickUpConnection = { connected: false };
+              pushToast("success", "ClickUp disconnected.");
+              renderClickUpCard();
+            })
+            .catch(function (err) { pushToast("error", err.message || "Failed to disconnect ClickUp."); })
+            .finally(function () { if (disconnectBtn instanceof HTMLButtonElement) setButtonBusy(disconnectBtn, false); });
+          return;
+        }
       });
     }
 
