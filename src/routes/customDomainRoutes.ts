@@ -3,7 +3,7 @@ import { z } from "zod";
 import dns from "dns/promises";
 
 import { prisma } from "../db/prisma";
-import { requireCompanyWriteAccess } from "../middleware/actorContext";
+import { requireCompanyWriteAccess } from "../middleware/actorAccess";
 
 export const customDomainRoutes = Router();
 
@@ -71,11 +71,13 @@ customDomainRoutes.post("/add", async (req, res) => {
   }
 
   // Create new domain record
+  const companyId = (req as any).companyId ?? "default";
   const newDomain = await prisma.customDomain.create({
     data: {
       domain,
       status: "pending_verification",
-      verificationMethod: "dns_txt"
+      verificationMethod: "dns_txt",
+      companyId
     }
   });
 
@@ -217,12 +219,14 @@ customDomainRoutes.post("/activate/:domainId", async (req, res) => {
   }
 
   // Update portal settings to use this domain
+  const companyId = (req as any).companyId ?? "default";
   await prisma.portalSettings.upsert({
     where: { id: "default" },
     update: { customDomainId: domainId },
     create: { 
       id: "default",
-      customDomainId: domainId 
+      customDomainId: domainId,
+      companyId
     }
   });
 

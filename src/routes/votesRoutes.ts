@@ -49,7 +49,7 @@ async function resolveUserId(payload: z.infer<typeof createVoteSchema>): Promise
 
   const email = payload.email.toLowerCase();
 
-  const existing = await prisma.user.findUnique({
+  const existing = await prisma.user.findFirst({
     where: { email }
   });
 
@@ -57,15 +57,19 @@ async function resolveUserId(payload: z.infer<typeof createVoteSchema>): Promise
     return existing.id;
   }
 
-  const company = await prisma.company.upsert({
-    where: { name: payload.companyName ?? "unassigned" },
-    update: {},
-    create: {
-      name: payload.companyName ?? "unassigned",
-      monthlySpend: 0,
-      healthStatus: "unknown"
-    }
-  });
+  const cName = payload.companyName ?? "unassigned";
+  const slug = cName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "unassigned";
+  let company = await prisma.company.findFirst({ where: { name: cName } });
+  if (!company) {
+    company = await prisma.company.create({
+      data: {
+        name: cName,
+        slug,
+        monthlySpend: 0,
+        healthStatus: "unknown"
+      }
+    });
+  }
 
   const created = await prisma.user.create({
     data: {

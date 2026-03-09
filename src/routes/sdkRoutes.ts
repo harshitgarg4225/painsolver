@@ -174,15 +174,17 @@ async function upsertIdentity(
         : null;
 
       if (!company) {
-        company = await tx.company.findUnique({
+        company = await tx.company.findFirst({
           where: { name: input.company.name }
         });
       }
 
       if (!company) {
+        const slug = input.company.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "company";
         company = await tx.company.create({
           data: {
             name: input.company.name,
+            slug,
             monthlySpend: input.company.monthlySpend ?? 0,
             healthStatus: input.company.healthStatus ?? "unknown",
             stripeCustomerId: input.company.stripeCustomerId
@@ -199,9 +201,10 @@ async function upsertIdentity(
         });
       }
 
-      const existingUser = await tx.user.findUnique({
+      const existingUser = await tx.user.findFirst({
         where: {
-          email: input.user.email
+          email: input.user.email,
+          companyId: company.id
         }
       });
 

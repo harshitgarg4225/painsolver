@@ -16,7 +16,7 @@ export interface PainEventProcessingResult {
 }
 
 async function getSimilarityThreshold(source: PainEventSource): Promise<number> {
-  const config = await prisma.aiInboxConfig.findUnique({
+  const config = await prisma.aiInboxConfig.findFirst({
     where: { source },
     select: { similarityThreshold: true }
   });

@@ -451,7 +451,7 @@ portalRoutes.get("/me", async (req, res) => {
     return;
   }
 
-  const user = await prisma.user.findUnique({
+  const user = await prisma.user.findFirst({
     where: { email: actor.email },
     include: {
       company: true

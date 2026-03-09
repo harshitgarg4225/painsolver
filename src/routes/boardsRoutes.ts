@@ -107,10 +107,14 @@ boardsRoutes.post("/create", requireApiKey, async (req, res) => {
     return;
   }
 
+  const companyId = (req as any).companyId ?? "default";
+  const slug = parsed.data.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
   const board = await prisma.board.create({
     data: {
       name: parsed.data.name,
-      isPrivate: parsed.data.isPrivate ?? false
+      slug,
+      isPrivate: parsed.data.isPrivate ?? false,
+      companyId
     }
   });
 

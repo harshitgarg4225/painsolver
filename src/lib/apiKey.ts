@@ -149,6 +149,14 @@ export async function createApiCredential(
     )
   );
 
+  // Find or create a default company for API credentials
+  let company = await prisma.company.findFirst({ orderBy: { createdAt: "asc" } });
+  if (!company) {
+    company = await prisma.company.create({
+      data: { name: "Default", slug: "default" }
+    });
+  }
+
   await prisma.apiCredential.upsert({
     where: { keyHash },
     update: {
@@ -160,7 +168,8 @@ export async function createApiCredential(
       name,
       keyHash,
       isActive: true,
-      scopes: normalizedScopes.length ? normalizedScopes : ["*"]
+      scopes: normalizedScopes.length ? normalizedScopes : ["*"],
+      companyId: company.id
     }
   });
 }

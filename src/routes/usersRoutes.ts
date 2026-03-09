@@ -97,15 +97,16 @@ usersRoutes.post("/create_or_update", requireApiKey, async (req, res) => {
         : null;
 
       if (!company && companyName) {
-        company = await tx.company.findUnique({ where: { name: companyName } });
+        company = await tx.company.findFirst({ where: { name: companyName } });
       }
 
       if (!company) {
-        company = await tx.company.upsert({
-          where: { name: companyName ?? "unassigned" },
-          update: {},
-          create: {
-            name: companyName ?? "unassigned",
+        const cName = companyName ?? "unassigned";
+        const slug = cName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "unassigned";
+        company = await tx.company.create({
+          data: {
+            name: cName,
+            slug,
             monthlySpend: 0,
             healthStatus: "unknown"
           }
@@ -121,7 +122,7 @@ usersRoutes.post("/create_or_update", requireApiKey, async (req, res) => {
               ]
             }
           })
-        : await tx.user.findUnique({
+        : await tx.user.findFirst({
             where: { email: email.toLowerCase() }
           });
 

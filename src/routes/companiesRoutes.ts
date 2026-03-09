@@ -88,8 +88,9 @@ companiesRoutes.post("/create_or_update", requireApiKey, async (req, res) => {
 
   const existing = payload.companyID
     ? await prisma.company.findUnique({ where: { id: payload.companyID } })
-    : await prisma.company.findUnique({ where: { name: payload.name } });
+    : await prisma.company.findFirst({ where: { name: payload.name } });
 
+  const slug = payload.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "company";
   const company = existing
     ? await prisma.company.update({
         where: { id: existing.id },
@@ -103,6 +104,7 @@ companiesRoutes.post("/create_or_update", requireApiKey, async (req, res) => {
     : await prisma.company.create({
         data: {
           name: payload.name,
+          slug,
           monthlySpend: payload.monthlySpend ?? 0,
           healthStatus: payload.healthStatus ?? "unknown",
           stripeCustomerId: payload.stripeCustomerId

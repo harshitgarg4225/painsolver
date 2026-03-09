@@ -481,26 +481,40 @@ function pickRecommendedBoard(input: {
 }
 
 async function ensureAiInboxConfig(
-  tx: PrismaClient | Prisma.TransactionClient
+  tx: PrismaClient | Prisma.TransactionClient,
+  companyId?: string
 ): Promise<Record<AiInboxSourceKey, AiInboxSourceConfigView>> {
+  // Resolve a companyId to use
+  const resolvedCompanyId = companyId || (await tx.company.findFirst({ orderBy: { createdAt: "asc" } }))?.id;
+  if (!resolvedCompanyId) {
+    // No company yet — return defaults without persisting
+    const result = {} as Record<AiInboxSourceKey, AiInboxSourceConfigView>;
+    for (const [source, config] of Object.entries(AI_INBOX_DEFAULTS)) {
+      result[source as AiInboxSourceKey] = { ...config, similarityThreshold: 0.75, source: source as AiInboxSourceKey, updatedAt: new Date().toISOString() };
+    }
+    return result;
+  }
+
   const defaults = Object.entries(AI_INBOX_DEFAULTS) as Array<
     [AiInboxSourceKey, { routingMode: AiInboxRoutingModeView; enabled: boolean }]
   >;
 
   await Promise.all(
-    defaults.map(([source, config]) =>
-      tx.aiInboxConfig.upsert({
-        where: {
-          source
-        },
-        update: {},
-        create: {
-          source: source as PainEventSource,
-          routingMode: config.routingMode as AiInboxRoutingMode,
-          enabled: config.enabled
-        }
-      })
-    )
+    defaults.map(async ([source, config]) => {
+      const existing = await tx.aiInboxConfig.findFirst({
+        where: { companyId: resolvedCompanyId, source: source as PainEventSource }
+      });
+      if (!existing) {
+        await tx.aiInboxConfig.create({
+          data: {
+            companyId: resolvedCompanyId,
+            source: source as PainEventSource,
+            routingMode: config.routingMode as AiInboxRoutingMode,
+            enabled: config.enabled
+          }
+        });
+      }
+    })
   );
 
   const rows = await tx.aiInboxConfig.findMany({
@@ -726,7 +740,7 @@ export async function upsertActorUser(
   const displayName = actor.displayName?.trim() || normalizedEmail;
   const appUserId = actor.appUserId?.trim() || null;
 
-  const existing = await tx.user.findUnique({
+  const existing = await tx.user.findFirst({
     where: { email: normalizedEmail },
     include: {
       company: {
@@ -770,44 +784,57 @@ export async function upsertActorUser(
       ? "PainSolver Internal"
       : titleCase(extractDomain(normalizedEmail)) + " Workspace";
 
-  const company = await tx.company.upsert({
-    where: { name: companyName },
-    update: {},
-    create: {
-      name: companyName,
-      monthlySpend: role === "customer" ? 199 : 0,
-      healthStatus: "active"
-    }
+  const slug = companyName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "company";
+  let company = await tx.company.findFirst({ where: { name: companyName } });
+  if (!company) {
+    company = await tx.company.create({
+      data: {
+        name: companyName,
+        slug,
+        monthlySpend: role === "customer" ? 199 : 0,
+        healthStatus: "active"
+      }
+    });
+  }
+
+  let created = await tx.user.findFirst({
+    where: { email: normalizedEmail, companyId: company.id }
   });
 
-  const created = await tx.user.upsert({
-    where: { email: normalizedEmail },
-    update: {
-      name: displayName,
-      appUserId: appUserId ?? undefined,
-      role,
-      segments
-    },
-    create: {
+  if (created) {
+    created = await tx.user.update({
+      where: { id: created.id },
+      data: {
+        name: displayName,
+        appUserId: appUserId ?? undefined,
+        role,
+        segments
+      }
+    });
+  } else {
+    created = await tx.user.create({
+      data: {
+        companyId: company.id,
+        email: normalizedEmail,
+        name: displayName,
+        appUserId,
+        role,
+        segments
+      }
+    });
+  }
+
+  return {
+    user: {
+      ...created,
       companyId: company.id,
-      email: normalizedEmail,
-      name: displayName,
-      appUserId,
-      role,
-      segments
-    },
-    include: {
       company: {
-        select: {
-          id: true,
-          name: true,
-          monthlySpend: true
-        }
+        id: company.id,
+        name: company.name,
+        monthlySpend: company.monthlySpend
       }
     }
-  });
-
-  return { user: created };
+  };
 }
 
 async function ensureNotificationPreferences(
@@ -2852,23 +2879,35 @@ export async function updateAiInboxConfig(input: {
   routingMode: AiInboxRoutingModeView;
   enabled: boolean;
   similarityThreshold?: number;
+  companyId?: string;
 }): Promise<AiInboxSourceConfigView> {
-  const next = await prisma.aiInboxConfig.upsert({
-    where: {
-      source: input.source as PainEventSource
-    },
-    update: {
-      routingMode: input.routingMode as AiInboxRoutingMode,
-      enabled: input.enabled,
-      ...(input.similarityThreshold !== undefined && { similarityThreshold: input.similarityThreshold })
-    },
-    create: {
-      source: input.source as PainEventSource,
-      routingMode: input.routingMode as AiInboxRoutingMode,
-      enabled: input.enabled,
-      similarityThreshold: input.similarityThreshold ?? 0.75
-    }
+  const resolvedCompanyId = input.companyId || (await prisma.company.findFirst({ orderBy: { createdAt: "asc" } }))?.id;
+  if (!resolvedCompanyId) {
+    throw new Error("No company found to update AI inbox config");
+  }
+
+  const existing = await prisma.aiInboxConfig.findFirst({
+    where: { companyId: resolvedCompanyId, source: input.source as PainEventSource }
   });
+
+  const next = existing
+    ? await prisma.aiInboxConfig.update({
+        where: { id: existing.id },
+        data: {
+          routingMode: input.routingMode as AiInboxRoutingMode,
+          enabled: input.enabled,
+          ...(input.similarityThreshold !== undefined && { similarityThreshold: input.similarityThreshold })
+        }
+      })
+    : await prisma.aiInboxConfig.create({
+        data: {
+          companyId: resolvedCompanyId,
+          source: input.source as PainEventSource,
+          routingMode: input.routingMode as AiInboxRoutingMode,
+          enabled: input.enabled,
+          similarityThreshold: input.similarityThreshold ?? 0.75
+        }
+      });
 
   return {
     source: next.source as AiInboxSourceKey,

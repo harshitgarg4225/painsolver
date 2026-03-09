@@ -39,6 +39,7 @@ const importTicketsSchema = z.object({
 
 const freshdeskConfigSelect = {
   id: true,
+  companyId: true,
   source: true,
   enabled: true,
   freshdeskDomain: true,
@@ -741,7 +742,7 @@ export async function notifyFreshdeskStatusChange(input: {
   if (painEvents.length === 0) return;
 
   // Get Freshdesk config
-  const config = await prisma.aiInboxConfig.findUnique({
+  const config = await prisma.aiInboxConfig.findFirst({
     where: { source: "freshdesk" },
     select: {
       freshdeskDomain: true,

@@ -41,7 +41,7 @@ webhooksRoutes.post("/freshdesk", async (req, res) => {
 
   try {
     const payload = parsed.data;
-    const sourceConfig = await prisma.aiInboxConfig.findUnique({
+    const sourceConfig = await prisma.aiInboxConfig.findFirst({
       where: {
         source: "freshdesk"
       },

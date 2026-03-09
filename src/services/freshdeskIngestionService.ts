@@ -46,20 +46,22 @@ export async function ingestFreshdeskSignal(
   const normalizedMrr = await calculateNormalizedMRR(requesterEmail);
 
   const painEvent = await prisma.$transaction(async (tx) => {
-    let user = await tx.user.findUnique({
+    let user = await tx.user.findFirst({
       where: { email: requesterEmail },
       include: { company: true }
     });
 
     if (!user) {
-      let company = await tx.company.findUnique({
+      let company = await tx.company.findFirst({
         where: { name: companyName }
       });
 
       if (!company) {
+        const slug = companyName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "company";
         company = await tx.company.create({
           data: {
             name: companyName,
+            slug,
             monthlySpend: normalizedMrr,
             healthStatus: "unknown"
           }
@@ -80,7 +82,8 @@ export async function ingestFreshdeskSignal(
         include: { company: true }
       });
     } else {
-      if (normalizedMrr > 0 && user.company.monthlySpend !== normalizedMrr) {
+      const userCompany = await tx.company.findUnique({ where: { id: user.companyId } });
+      if (normalizedMrr > 0 && userCompany && userCompany.monthlySpend !== normalizedMrr) {
         await tx.company.update({
           where: { id: user.companyId },
           data: { monthlySpend: normalizedMrr }

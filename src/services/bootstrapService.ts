@@ -10,20 +10,27 @@ async function upsertCompany(input: {
   healthStatus: string;
   stripeCustomerId?: string;
 }): Promise<{ id: string; name: string }> {
-  const company = await prisma.company.upsert({
-    where: { name: input.name },
-    update: {
-      monthlySpend: input.monthlySpend,
-      healthStatus: input.healthStatus,
-      stripeCustomerId: input.stripeCustomerId
-    },
-    create: {
-      name: input.name,
-      monthlySpend: input.monthlySpend,
-      healthStatus: input.healthStatus,
-      stripeCustomerId: input.stripeCustomerId
-    }
-  });
+  const existing = await prisma.company.findFirst({ where: { name: input.name } });
+  const slug = input.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "company";
+  
+  const company = existing
+    ? await prisma.company.update({
+        where: { id: existing.id },
+        data: {
+          monthlySpend: input.monthlySpend,
+          healthStatus: input.healthStatus,
+          stripeCustomerId: input.stripeCustomerId
+        }
+      })
+    : await prisma.company.create({
+        data: {
+          name: input.name,
+          slug,
+          monthlySpend: input.monthlySpend,
+          healthStatus: input.healthStatus,
+          stripeCustomerId: input.stripeCustomerId
+        }
+      });
 
   return { id: company.id, name: company.name };
 }
@@ -36,24 +43,30 @@ async function upsertUser(input: {
   appUserId?: string;
   segments?: string[];
 }): Promise<{ id: string; email: string }> {
-  const user = await prisma.user.upsert({
-    where: { email: input.email.toLowerCase() },
-    update: {
-      companyId: input.companyId,
-      name: input.name,
-      role: input.role,
-      appUserId: input.appUserId,
-      segments: input.segments ?? []
-    },
-    create: {
-      companyId: input.companyId,
-      email: input.email.toLowerCase(),
-      name: input.name,
-      role: input.role,
-      appUserId: input.appUserId,
-      segments: input.segments ?? []
-    }
+  const existing = await prisma.user.findFirst({
+    where: { email: input.email.toLowerCase(), companyId: input.companyId }
   });
+
+  const user = existing
+    ? await prisma.user.update({
+        where: { id: existing.id },
+        data: {
+          name: input.name,
+          role: input.role,
+          appUserId: input.appUserId,
+          segments: input.segments ?? []
+        }
+      })
+    : await prisma.user.create({
+        data: {
+          companyId: input.companyId,
+          email: input.email.toLowerCase(),
+          name: input.name,
+          role: input.role,
+          appUserId: input.appUserId,
+          segments: input.segments ?? []
+        }
+      });
 
   await prisma.notificationPreference.upsert({
     where: { userId: user.id },
@@ -67,25 +80,34 @@ async function upsertUser(input: {
 }
 
 async function createBoardWithCategories(input: {
+  companyId: string;
   name: string;
   visibility: "public" | "private" | "custom";
   allowedSegments?: string[];
   categoryNames: string[];
 }): Promise<{ id: string; categories: Array<{ id: string; name: string }> }> {
-  const board = await prisma.board.upsert({
-    where: { name: input.name },
-    update: {
-      visibility: input.visibility,
-      isPrivate: input.visibility !== "public",
-      allowedSegments: input.allowedSegments ?? []
-    },
-    create: {
-      name: input.name,
-      visibility: input.visibility,
-      isPrivate: input.visibility !== "public",
-      allowedSegments: input.allowedSegments ?? []
-    }
-  });
+  const slug = input.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+  const existing = await prisma.board.findFirst({ where: { name: input.name, companyId: input.companyId } });
+
+  const board = existing
+    ? await prisma.board.update({
+        where: { id: existing.id },
+        data: {
+          visibility: input.visibility,
+          isPrivate: input.visibility !== "public",
+          allowedSegments: input.allowedSegments ?? []
+        }
+      })
+    : await prisma.board.create({
+        data: {
+          name: input.name,
+          slug,
+          companyId: input.companyId,
+          visibility: input.visibility,
+          isPrivate: input.visibility !== "public",
+          allowedSegments: input.allowedSegments ?? []
+        }
+      });
 
   const categories: Array<{ id: string; name: string }> = [];
   for (const categoryName of input.categoryNames) {
@@ -110,8 +132,8 @@ async function createBoardWithCategories(input: {
 
 async function ensureWorkspaceBackfills(): Promise<void> {
   const [wilberth, sara] = await Promise.all([
-    prisma.user.findUnique({ where: { email: "wilberth@acmeagency.com" } }),
-    prisma.user.findUnique({ where: { email: "sara@orbitcommerce.com" } })
+    prisma.user.findFirst({ where: { email: "wilberth@acmeagency.com" } }),
+    prisma.user.findFirst({ where: { email: "sara@orbitcommerce.com" } })
   ]);
 
   if (!wilberth || !sara) {
@@ -119,9 +141,9 @@ async function ensureWorkspaceBackfills(): Promise<void> {
   }
 
   const [adBoard, apiBoard, automationBoard] = await Promise.all([
-    prisma.board.findUnique({ where: { name: "Ad Reporting and Attribution" } }),
-    prisma.board.findUnique({ where: { name: "APIs" } }),
-    prisma.board.findUnique({ where: { name: "Automations" } })
+    prisma.board.findFirst({ where: { name: "Ad Reporting and Attribution" } }),
+    prisma.board.findFirst({ where: { name: "APIs" } }),
+    prisma.board.findFirst({ where: { name: "Automations" } })
   ]);
 
   if (!adBoard || !apiBoard || !automationBoard) {
@@ -328,25 +350,33 @@ async function ensureWorkspaceBackfills(): Promise<void> {
 }
 
 async function ensureAiInboxConfigDefaults(): Promise<void> {
-  await prisma.aiInboxConfig.upsert({
-    where: { source: "freshdesk" },
-    update: {},
-    create: {
-      source: "freshdesk",
-      routingMode: "central",
-      enabled: true
-    }
-  });
+  // Find the first company for AI inbox config
+  const company = await prisma.company.findFirst({ orderBy: { createdAt: "asc" } });
+  if (!company) return;
 
-  await prisma.aiInboxConfig.upsert({
-    where: { source: "zoom" },
-    update: {},
-    create: {
-      source: "zoom",
-      routingMode: "individual",
-      enabled: true
-    }
-  });
+  const existingFd = await prisma.aiInboxConfig.findFirst({ where: { companyId: company.id, source: "freshdesk" } });
+  if (!existingFd) {
+    await prisma.aiInboxConfig.create({
+      data: {
+        companyId: company.id,
+        source: "freshdesk",
+        routingMode: "central",
+        enabled: true
+      }
+    });
+  }
+
+  const existingZoom = await prisma.aiInboxConfig.findFirst({ where: { companyId: company.id, source: "zoom" } });
+  if (!existingZoom) {
+    await prisma.aiInboxConfig.create({
+      data: {
+        companyId: company.id,
+        source: "zoom",
+        routingMode: "individual",
+        enabled: true
+      }
+    });
+  }
 }
 
 export async function ensureBootstrapData(): Promise<void> {
@@ -422,12 +452,14 @@ export async function ensureBootstrapData(): Promise<void> {
   });
 
   const adReportingBoard = await createBoardWithCategories({
+    companyId: internalCompany.id,
     name: "Ad Reporting and Attribution",
     visibility: "public",
     categoryNames: ["Feedback", "Bugs"]
   });
 
   const apiBoard = await createBoardWithCategories({
+    companyId: internalCompany.id,
     name: "APIs",
     visibility: "custom",
     allowedSegments: ["technical", "enterprise", "developer"],
@@ -435,12 +467,14 @@ export async function ensureBootstrapData(): Promise<void> {
   });
 
   const automationBoard = await createBoardWithCategories({
+    companyId: internalCompany.id,
     name: "Automations",
     visibility: "public",
     categoryNames: ["General", "Workflow"]
   });
 
   const voiceBoard = await createBoardWithCategories({
+    companyId: internalCompany.id,
     name: "Voice AI",
     visibility: "custom",
     allowedSegments: ["ai", "beta", "enterprise"],
@@ -448,6 +482,7 @@ export async function ensureBootstrapData(): Promise<void> {
   });
 
   const conversationBoard = await createBoardWithCategories({
+    companyId: internalCompany.id,
     name: "Conversations",
     visibility: "private",
     categoryNames: ["Internal", "Escalations"]
