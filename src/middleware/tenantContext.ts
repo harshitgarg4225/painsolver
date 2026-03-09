@@ -99,6 +99,14 @@ export async function resolveTenantContext(
       }
     }
 
+    // 6. Fallback: use first company if none matched (demo/single-tenant mode)
+    if (!company) {
+      company = await prisma.company.findFirst({
+        orderBy: { createdAt: "asc" },
+        select: { id: true, slug: true, name: true }
+      });
+    }
+
     // Set tenant context if found
     if (company) {
       req.tenant = {

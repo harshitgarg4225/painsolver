@@ -803,7 +803,15 @@
     var h = {
       "Content-Type": "application/json"
     };
-    // Session cookie is sent automatically — no need for hardcoded auth headers.
+    // If authenticated, session cookie is sent automatically.
+    // If NOT authenticated (demo mode), send fallback actor headers.
+    if (!state.isAuthenticated) {
+      h["x-painsolver-role"] = "admin";
+      h["x-painsolver-auth"] = "true";
+      h["x-painsolver-email"] = "demo@painsolver.io";
+      h["x-painsolver-name"] = "Demo User";
+      h["x-painsolver-segments"] = "internal";
+    }
     // Multi-tenancy: include company context in all requests
     if (state.companyId) {
       h["X-Company-ID"] = state.companyId;
@@ -821,8 +829,8 @@
       credentials: "same-origin", // Send session cookies
       body: options && options.body ? JSON.stringify(options.body) : undefined
     }).then(function (response) {
-      // If 401/403, redirect to login
-      if (response.status === 401 || response.status === 403) {
+      // If 401/403 and authenticated, redirect to login (session expired)
+      if ((response.status === 401 || response.status === 403) && state.isAuthenticated) {
         window.location.href = "/auth";
         return Promise.reject(new Error("Authentication required"));
       }
@@ -6082,22 +6090,26 @@
     return fetch("/api/auth/session", { credentials: "same-origin" })
       .then(function (res) { return res.json(); })
       .then(function (data) {
-        if (!data.authenticated || !data.user) {
-          // Not logged in → redirect to auth page
-          window.location.href = "/auth";
-          return Promise.reject(new Error("Not authenticated"));
+        if (data.authenticated && data.user) {
+          // Authenticated — use real user context
+          state.authUser = data.user;
+          state.isAuthenticated = true;
+          state.companyId = data.user.companyId;
+          state.companySlug = data.user.companySlug;
+          updateUserMenu(data.user);
+        } else {
+          // Not authenticated — continue in anonymous/demo mode
+          state.isAuthenticated = false;
+          state.authUser = null;
+          console.log("[PainSolver] No active session — running in demo mode. Sign up at /auth to save your work.");
         }
-
-        // Store auth user
-        state.authUser = data.user;
-        state.isAuthenticated = true;
-        state.companyId = data.user.companyId;
-        state.companySlug = data.user.companySlug;
-
-        // Update user menu UI
-        updateUserMenu(data.user);
-
         return data;
+      })
+      .catch(function (err) {
+        // Session check failed (network error etc.) — continue anyway
+        console.warn("[PainSolver] Auth check failed, continuing in demo mode:", err.message);
+        state.isAuthenticated = false;
+        return { authenticated: false };
       });
   }
 
