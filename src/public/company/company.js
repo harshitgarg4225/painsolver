@@ -1,5 +1,8 @@
 (function companyApp(window, document) {
   var state = {
+    // Auth state
+    authUser: null, // { id, email, name, role, companyId, companySlug, companyName }
+    isAuthenticated: false,
     companyId: null,  // Multi-tenancy: current company context
     companySlug: null,
     tab: "feedback",
@@ -798,12 +801,9 @@
 
   function headers() {
     var h = {
-      "Content-Type": "application/json",
-      "x-painsolver-role": "member",
-      "x-painsolver-auth": "true",
-      "x-painsolver-user-id": "company-member",
-      "x-painsolver-email": "member@painsolver.io"
+      "Content-Type": "application/json"
     };
+    // Session cookie is sent automatically — no need for hardcoded auth headers.
     // Multi-tenancy: include company context in all requests
     if (state.companyId) {
       h["X-Company-ID"] = state.companyId;
@@ -818,8 +818,14 @@
     return fetch(path, {
       method: (options && options.method) || "GET",
       headers: headers(),
+      credentials: "same-origin", // Send session cookies
       body: options && options.body ? JSON.stringify(options.body) : undefined
     }).then(function (response) {
+      // If 401/403, redirect to login
+      if (response.status === 401 || response.status === 403) {
+        window.location.href = "/auth";
+        return Promise.reject(new Error("Authentication required"));
+      }
       if (!response.ok) {
         return response.text().then(function (text) {
           var message = text || "Request failed";
@@ -3608,6 +3614,35 @@
   }
 
   function bindEvents() {
+    // ── User menu dropdown ──
+    var avatarBtn = document.getElementById("user-avatar-btn");
+    var userDropdown = document.getElementById("user-dropdown");
+    if (avatarBtn && userDropdown) {
+      avatarBtn.addEventListener("click", function (e) {
+        e.stopPropagation();
+        var isOpen = userDropdown.style.display !== "none";
+        userDropdown.style.display = isOpen ? "none" : "block";
+      });
+      document.addEventListener("click", function (e) {
+        if (!e.target.closest("#user-menu-wrapper")) {
+          userDropdown.style.display = "none";
+        }
+      });
+    }
+    var btnLogout = document.getElementById("btn-logout");
+    if (btnLogout) {
+      btnLogout.addEventListener("click", handleLogout);
+    }
+    var btnViewPortal = document.getElementById("btn-view-portal");
+    if (btnViewPortal) {
+      btnViewPortal.addEventListener("click", function () { window.open("/portal", "_blank"); });
+    }
+    var btnViewDocs = document.getElementById("btn-view-docs");
+    if (btnViewDocs) {
+      btnViewDocs.addEventListener("click", function () { window.open("/docs", "_blank"); });
+    }
+
+    // ── Navigation ──
     el.nav.addEventListener("click", function (event) {
       var target = event.target;
       if (!(target instanceof HTMLElement)) {
@@ -6039,65 +6074,94 @@
     }
   }
 
-  function loadCompanyContext() {
-    // Try to get company from URL first (e.g., /company/acme-corp or ?company=acme-corp)
-    var pathParts = window.location.pathname.split("/");
-    var companySlugFromPath = pathParts.length > 2 && pathParts[1] === "company" ? pathParts[2] : null;
-    var urlParams = new URLSearchParams(window.location.search);
-    var companySlugFromQuery = urlParams.get("company");
-    
-    if (companySlugFromPath) {
-      state.companySlug = companySlugFromPath;
-    } else if (companySlugFromQuery) {
-      state.companySlug = companySlugFromQuery;
-    }
-    
-    // Load company details from session/API
-    return request("/api/company/session")
+  /**
+   * Check authentication and load user/company context.
+   * Returns a promise that resolves with auth data or rejects if not authenticated.
+   */
+  function checkAuthAndLoadContext() {
+    return fetch("/api/auth/session", { credentials: "same-origin" })
+      .then(function (res) { return res.json(); })
       .then(function (data) {
-        if (data.actor && data.actor.companyId) {
-          state.companyId = data.actor.companyId;
+        if (!data.authenticated || !data.user) {
+          // Not logged in → redirect to auth page
+          window.location.href = "/auth";
+          return Promise.reject(new Error("Not authenticated"));
         }
-        if (data.actor && data.actor.companySlug) {
-          state.companySlug = data.actor.companySlug;
-        }
+
+        // Store auth user
+        state.authUser = data.user;
+        state.isAuthenticated = true;
+        state.companyId = data.user.companyId;
+        state.companySlug = data.user.companySlug;
+
+        // Update user menu UI
+        updateUserMenu(data.user);
+
         return data;
+      });
+  }
+
+  function updateUserMenu(user) {
+    // Update avatar with user initial
+    var avatarBtn = document.getElementById("user-avatar-btn");
+    if (avatarBtn) {
+      avatarBtn.textContent = (user.name || user.email || "?").charAt(0).toUpperCase();
+    }
+    // Update dropdown
+    var nameEl = document.getElementById("user-dropdown-name");
+    var emailEl = document.getElementById("user-dropdown-email");
+    if (nameEl) nameEl.textContent = user.name || "User";
+    if (emailEl) emailEl.textContent = user.email || "";
+  }
+
+  function handleLogout() {
+    fetch("/api/auth/logout", { method: "POST", credentials: "same-origin" })
+      .then(function () {
+        window.location.href = "/auth";
       })
-      .catch(function (err) {
-        console.warn("Failed to load company context:", err);
-        // Continue without company context for backwards compatibility
-        return null;
+      .catch(function () {
+        window.location.href = "/auth";
       });
   }
 
   function bootstrap() {
-    renderTabs();
-    renderSavedViews();
-    renderAiInboxViews();
-    renderCreateBoardSegments();
-    setChangelogPreviewState(false);
-    renderCommentReplyContext();
-    renderChangelogPreview(null);
-    renderCustomerView();
+    // ── Step 1: Check authentication before anything else ──
+    checkAuthAndLoadContext()
+      .then(function () {
+        // ── Step 2: Render UI ──
+        renderTabs();
+        renderSavedViews();
+        renderAiInboxViews();
+        renderCreateBoardSegments();
+        setChangelogPreviewState(false);
+        renderCommentReplyContext();
+        renderChangelogPreview(null);
+        renderCustomerView();
 
-    if (el.changelogStatusFilter) {
-      el.changelogStatusFilter.value = state.changelogStatus;
-    }
-    if (el.triageStatusFilter) {
-      el.triageStatusFilter.value = state.triageStatus;
-    }
-    if (el.triageSourceFilter) {
-      el.triageSourceFilter.value = state.triageSource;
-    }
+        if (el.changelogStatusFilter) {
+          el.changelogStatusFilter.value = state.changelogStatus;
+        }
+        if (el.triageStatusFilter) {
+          el.triageStatusFilter.value = state.triageStatus;
+        }
+        if (el.triageSourceFilter) {
+          el.triageSourceFilter.value = state.triageSource;
+        }
 
-    state.errors.reportingSummary = "";
-    state.errors.reportingPosts = "";
-    state.errors.reportingOpportunities = "";
+        state.errors.reportingSummary = "";
+        state.errors.reportingPosts = "";
+        state.errors.reportingOpportunities = "";
 
-    // Load company context first, then load data
-    loadCompanyContext().then(function () {
-      return Promise.all([loadSummary(), loadMembers(), loadBoards(), loadSavedFilters()]);
-    })
+        // Remove loading overlay
+        var overlay = document.getElementById("auth-loading-overlay");
+        if (overlay) {
+          overlay.classList.add("fade-out");
+          setTimeout(function () { overlay.remove(); }, 300);
+        }
+
+        // ── Step 3: Load data ──
+        return Promise.all([loadSummary(), loadMembers(), loadBoards(), loadSavedFilters()]);
+      })
       .then(function () {
         return Promise.all([
           loadFeedback(),
@@ -6114,6 +6178,9 @@
         ]);
       })
       .catch(function (error) {
+        if (error && error.message === "Not authenticated") {
+          return; // Redirect is already happening
+        }
         console.error("Company bootstrap failed", error);
       });
   }

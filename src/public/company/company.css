@@ -221,6 +221,126 @@ button:focus-visible,
   color: #fff;
   font-size: 0.88rem;
   font-weight: 600;
+  cursor: pointer;
+  transition: box-shadow 0.15s;
+}
+.avatar:hover {
+  box-shadow: 0 0 0 3px rgba(0, 69, 73, 0.25);
+}
+
+/* ─── User Menu Dropdown ─── */
+.user-menu-wrapper {
+  position: relative;
+}
+.user-dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  width: 260px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.12);
+  z-index: 1000;
+  overflow: hidden;
+  animation: dropdownIn 0.15s ease-out;
+}
+@keyframes dropdownIn {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.user-dropdown-header {
+  padding: 16px;
+}
+.user-dropdown-name {
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: var(--text);
+}
+.user-dropdown-email {
+  font-size: 0.8rem;
+  color: var(--muted);
+  margin-top: 2px;
+}
+.user-dropdown-divider {
+  height: 1px;
+  background: var(--line);
+}
+.user-dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 16px;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  font-size: 0.85rem;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.1s;
+}
+.user-dropdown-item:hover {
+  background: var(--surface-soft);
+}
+.user-dropdown-item .ms {
+  font-size: 18px;
+  color: var(--muted);
+}
+.user-dropdown-danger {
+  color: #dc2626;
+}
+.user-dropdown-danger .ms {
+  color: #dc2626;
+}
+.user-dropdown-danger:hover {
+  background: #fef2f2;
+}
+
+/* ─── Auth Loading Overlay ─── */
+.auth-loading-overlay {
+  position: fixed;
+  inset: 0;
+  background: var(--bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  transition: opacity 0.3s;
+}
+.auth-loading-overlay.fade-out {
+  opacity: 0;
+  pointer-events: none;
+}
+.auth-loading-spinner {
+  text-align: center;
+}
+.auth-loading-spinner .brand-mark {
+  width: 56px;
+  height: 56px;
+  margin: 0 auto 16px;
+  border-radius: 14px;
+  background: var(--aqua-900);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.4rem;
+  font-weight: 700;
+}
+.auth-loading-spinner p {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+.auth-loading-spinner .dots::after {
+  content: "";
+  animation: dots 1.5s infinite;
+}
+@keyframes dots {
+  0% { content: ""; }
+  25% { content: "."; }
+  50% { content: ".."; }
+  75% { content: "..."; }
 }
 
 /* ========================================

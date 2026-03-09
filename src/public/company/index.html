@@ -14,6 +14,14 @@
     <link rel="stylesheet" href="/company-assets/company.css" />
   </head>
   <body>
+    <!-- Auth loading overlay — removed after session check -->
+    <div class="auth-loading-overlay" id="auth-loading-overlay">
+      <div class="auth-loading-spinner">
+        <div class="brand-mark"><span>P</span></div>
+        <p>Loading<span class="dots"></span></p>
+      </div>
+    </div>
+
     <header class="studio-topbar">
       <div class="brand-block">
         <div class="brand-mark">
@@ -61,7 +69,26 @@
           <span class="ms">add</span>
           <span>New Post</span>
         </button>
-        <button class="avatar" type="button">A</button>
+        <div class="user-menu-wrapper" id="user-menu-wrapper">
+          <button class="avatar" id="user-avatar-btn" type="button">?</button>
+          <div class="user-dropdown" id="user-dropdown" style="display:none">
+            <div class="user-dropdown-header">
+              <div class="user-dropdown-name" id="user-dropdown-name">—</div>
+              <div class="user-dropdown-email" id="user-dropdown-email">—</div>
+            </div>
+            <div class="user-dropdown-divider"></div>
+            <button class="user-dropdown-item" id="btn-view-portal" type="button">
+              <span class="ms">public</span> Customer Portal
+            </button>
+            <button class="user-dropdown-item" id="btn-view-docs" type="button">
+              <span class="ms">description</span> API Docs
+            </button>
+            <div class="user-dropdown-divider"></div>
+            <button class="user-dropdown-item user-dropdown-danger" id="btn-logout" type="button">
+              <span class="ms">logout</span> Sign Out
+            </button>
+          </div>
+        </div>
       </div>
     </header>
 

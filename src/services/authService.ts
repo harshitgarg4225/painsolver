@@ -1,28 +1,28 @@
-import { createHash, randomBytes, timingSafeEqual } from "crypto";
+import { randomBytes } from "crypto";
+import bcrypt from "bcryptjs";
 import { prisma } from "../db/prisma";
 import { sendEmail } from "./emailService";
 
-// Simple password hashing using SHA-256 with salt (for demo - use bcrypt in production)
-function hashPassword(password: string, salt?: string): { hash: string; salt: string } {
-  const useSalt = salt || randomBytes(16).toString("hex");
-  const hash = createHash("sha256")
-    .update(password + useSalt)
-    .digest("hex");
-  return { hash: `${useSalt}:${hash}`, salt: useSalt };
+const BCRYPT_ROUNDS = 12;
+
+async function hashPassword(password: string): Promise<string> {
+  return bcrypt.hash(password, BCRYPT_ROUNDS);
 }
 
-function verifyPassword(password: string, storedHash: string): boolean {
-  const [salt, hash] = storedHash.split(":");
-  if (!salt || !hash) return false;
-  
-  const { hash: computedHash } = hashPassword(password, salt);
-  const [, computed] = computedHash.split(":");
-  
-  try {
-    return timingSafeEqual(Buffer.from(hash), Buffer.from(computed || ""));
-  } catch {
-    return false;
+async function verifyPassword(password: string, storedHash: string): Promise<boolean> {
+  // Support legacy SHA-256 hashes (salt:hash format) for migration
+  if (storedHash.includes(":") && !storedHash.startsWith("$2")) {
+    const { createHash, timingSafeEqual } = await import("crypto");
+    const [salt, hash] = storedHash.split(":");
+    if (!salt || !hash) return false;
+    const computed = createHash("sha256").update(password + salt).digest("hex");
+    try {
+      return timingSafeEqual(Buffer.from(hash), Buffer.from(computed));
+    } catch {
+      return false;
+    }
   }
+  return bcrypt.compare(password, storedHash);
 }
 
 function generateToken(length: number = 32): string {
@@ -101,7 +101,7 @@ export async function signup(input: SignupInput): Promise<AuthResult> {
     }
 
     // Hash password
-    const { hash: passwordHash } = hashPassword(password);
+    const passwordHash = await hashPassword(password);
     const emailVerifyToken = generateToken();
 
     // Create company, user, and default board in transaction
@@ -200,7 +200,7 @@ export async function login(input: LoginInput, meta?: { userAgent?: string; ip?:
     }
 
     // Verify password
-    if (!verifyPassword(password, user.passwordHash)) {
+    if (!(await verifyPassword(password, user.passwordHash))) {
       return { success: false, error: "Invalid email or password" };
     }
 
@@ -405,7 +405,7 @@ export async function resetPassword(token: string, newPassword: string): Promise
       return { success: false, error: "Invalid or expired reset link" };
     }
 
-    const { hash: passwordHash } = hashPassword(newPassword);
+    const passwordHash = await hashPassword(newPassword);
 
     await prisma.user.update({
       where: { id: user.id },
@@ -510,7 +510,7 @@ export async function acceptInvite(token: string, password: string): Promise<Aut
       return { success: false, error: "Invalid or expired invitation link" };
     }
 
-    const { hash: passwordHash } = hashPassword(password);
+    const passwordHash = await hashPassword(password);
 
     const updatedUser = await prisma.user.update({
       where: { id: user.id },
