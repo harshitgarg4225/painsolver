@@ -87,7 +87,7 @@ enum AiInboxRoutingMode {
 model Company {
   id               String   @id @default(cuid())
   name             String
-  slug             String   @unique  // URL-safe identifier (e.g., "acme-corp")
+  slug             String   @unique @default("")  // URL-safe identifier (e.g., "acme-corp")
   monthlySpend     Float    @default(0)
   healthStatus     String   @default("unknown")
   stripeCustomerId String?  @unique
@@ -109,7 +109,7 @@ model Company {
 
 model User {
   id                   String                  @id @default(cuid())
-  companyId            String
+  companyId            String                  @default("")
   email                String
   name                 String                  @default("")
   passwordHash         String?                 // null for OAuth/SSO users
@@ -161,9 +161,9 @@ model Session {
 
 model Board {
   id              String          @id @default(cuid())
-  companyId       String
+  companyId       String          @default("")
   name            String
-  slug            String          // URL-safe board name
+  slug            String          @default("")  // URL-safe board name
   isPrivate       Boolean         @default(false)
   visibility      BoardVisibility @default(public)
   allowedSegments String[]        @default([])
@@ -321,7 +321,7 @@ model ChangelogEntry {
 // ============================================
 model ApiCredential {
   id        String   @id @default(cuid())
-  companyId String
+  companyId String   @default("")
   name      String
   keyHash   String   @unique
   isActive  Boolean  @default(true)
@@ -396,7 +396,7 @@ model SavedFilter {
 // ============================================
 model AiInboxConfig {
   id                        String             @id @default(cuid())
-  companyId                 String
+  companyId                 String             @default("")
   source                    PainEventSource
   routingMode               AiInboxRoutingMode
   enabled                   Boolean            @default(true)
@@ -475,7 +475,7 @@ enum CustomDomainStatus {
 // ============================================
 model CustomDomain {
   id                 String             @id @default(cuid())
-  companyId          String
+  companyId          String             @default("")
   domain             String             @unique
   status             CustomDomainStatus @default(pending_verification)
   verificationToken  String             @unique @default(cuid())
@@ -497,7 +497,7 @@ model CustomDomain {
 // ============================================
 model PortalSettings {
   id                  String   @id @default(cuid())
-  companyId           String   @unique
+  companyId           String   @unique @default("")
   portalName          String   @default("Feedback Portal")
   portalLogo          String?
   primaryColor        String   @default("#004549")

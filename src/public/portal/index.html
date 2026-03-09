@@ -121,8 +121,13 @@
           <p>What is planned, in progress, and shipped for your selected board.</p>
         </header>
         <div class="roadmap-head">
-          <h2>Roadmap Board</h2>
-          <p>What we are planning, building, and shipping.</p>
+          <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+            <label for="roadmap-board-select" style="font-weight:600;color:var(--text-secondary,#94a3b8);">Board</label>
+            <select id="roadmap-board-select" class="board-select" style="padding:6px 12px;border-radius:8px;border:1px solid var(--line,#1e293b);background:var(--surface,#0c1927);color:var(--text,#e2e8f0);font-size:13px;">
+              <option value="">Select a board</option>
+            </select>
+          </div>
+          <p style="margin-top:6px;">What we are planning, building, and shipping.</p>
         </div>
         <div class="roadmap-grid">
           <article class="card">

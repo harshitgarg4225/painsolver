@@ -89,6 +89,7 @@
     statusFilterChips: document.getElementById("status-filter-chips"),
     searchInput: document.getElementById("search-input"),
     feedbackList: document.getElementById("feedback-list"),
+    roadmapBoardSelect: document.getElementById("roadmap-board-select"),
     roadmapPlanned: document.getElementById("roadmap-planned"),
     roadmapProgress: document.getElementById("roadmap-progress"),
     roadmapComplete: document.getElementById("roadmap-complete"),
@@ -1182,10 +1183,21 @@
       .finally(function () {
         setLoading("boards", false);
         renderBoards();
+        updateRoadmapBoardSelect();
         updateAccessUi();
         renderFeedback();
         renderRoadmap(state.roadmap);
       });
+  }
+
+  function updateRoadmapBoardSelect() {
+    if (!el.roadmapBoardSelect) return;
+    var options = '<option value="">Select a board</option>';
+    state.boards.forEach(function (board) {
+      var selected = board.id === state.boardId ? " selected" : "";
+      options += '<option value="' + esc(board.id) + '"' + selected + '>' + esc(board.name) + '</option>';
+    });
+    el.roadmapBoardSelect.innerHTML = options;
   }
 
   function loadFeedback() {
@@ -1972,6 +1984,17 @@
             }, 1500);
           }
         }, 100);
+      });
+    }
+
+    if (el.roadmapBoardSelect) {
+      el.roadmapBoardSelect.addEventListener("change", function () {
+        var boardId = el.roadmapBoardSelect.value;
+        if (boardId) {
+          setActiveBoard(boardId);
+          renderBoards();
+          loadRoadmap().then(function () { renderRoadmap(state.roadmap); });
+        }
       });
     }
 

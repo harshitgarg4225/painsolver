@@ -6097,13 +6097,25 @@
           state.companyId = data.user.companyId;
           state.companySlug = data.user.companySlug;
           updateUserMenu(data.user);
+          return data;
         } else {
           // Not authenticated — continue in anonymous/demo mode
           state.isAuthenticated = false;
           state.authUser = null;
-          console.log("[PainSolver] No active session — running in demo mode. Sign up at /auth to save your work.");
+          console.log("[PainSolver] No active session — running in demo mode.");
+          // Fetch company context from the session endpoint so we have companyId
+          return fetch("/api/company/session", { credentials: "same-origin" })
+            .then(function (res2) { return res2.json(); })
+            .then(function (sessionData) {
+              if (sessionData.actor) {
+                state.companyId = sessionData.actor.companyId || null;
+                state.companySlug = sessionData.actor.companySlug || null;
+                console.log("[PainSolver] Demo mode — company context:", state.companyId);
+              }
+              return data;
+            })
+            .catch(function () { return data; });
         }
-        return data;
       })
       .catch(function (err) {
         // Session check failed (network error etc.) — continue anyway
