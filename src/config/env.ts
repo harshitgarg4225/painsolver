@@ -7,6 +7,7 @@ const envSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   PORT: z.coerce.number().default(3000),
   DATABASE_URL: z.string().min(1).default("postgresql://demo:demo@localhost:5432/painsolver_demo"),
+  DIRECT_URL: z.string().optional(),
   REDIS_URL: z.string().min(1).default("redis://localhost:6379"),
   SUPABASE_URL: z.string().optional(),
   SUPABASE_SERVICE_ROLE_KEY: z.string().optional(),
