@@ -16,12 +16,66 @@ declare global {
 }
 
 /**
+ * Safely fetch a company by ID.
+ * Uses a minimal select to avoid failing on missing columns.
+ */
+async function findCompanyById(id: string): Promise<{ id: string; slug: string; name: string } | null> {
+  try {
+    const company = await prisma.company.findUnique({
+      where: { id },
+      select: { id: true, slug: true, name: true }
+    });
+    return company;
+  } catch {
+    // slug column might not exist yet — try without it
+    try {
+      const rows: any[] = await prisma.$queryRawUnsafe(
+        `SELECT id, name FROM "Company" WHERE id = $1 LIMIT 1`,
+        id
+      );
+      if (rows.length > 0) {
+        return { id: rows[0].id, slug: rows[0].slug || "", name: rows[0].name };
+      }
+    } catch {
+      // Table might not exist or other error
+    }
+    return null;
+  }
+}
+
+/**
+ * Safely fetch the first company (fallback for single-tenant/demo mode).
+ */
+async function findFirstCompany(): Promise<{ id: string; slug: string; name: string } | null> {
+  try {
+    const company = await prisma.company.findFirst({
+      orderBy: { createdAt: "asc" },
+      select: { id: true, slug: true, name: true }
+    });
+    return company;
+  } catch {
+    // slug column might not exist — try raw query
+    try {
+      const rows: any[] = await prisma.$queryRawUnsafe(
+        `SELECT id, name FROM "Company" ORDER BY "createdAt" ASC LIMIT 1`
+      );
+      if (rows.length > 0) {
+        return { id: rows[0].id, slug: rows[0].slug || "", name: rows[0].name };
+      }
+    } catch {
+      // Table might not exist
+    }
+    return null;
+  }
+}
+
+/**
  * Resolves tenant context from various sources:
  * 1. X-Company-ID header (for API calls)
  * 2. X-Company-Slug header (for API calls)
  * 3. Subdomain (e.g., acme.painsolver.vercel.app)
- * 4. Custom domain lookup
- * 5. Actor's company (if authenticated)
+ * 4. Actor's company (if authenticated)
+ * 5. Fallback: first company (demo/single-tenant mode)
  */
 export async function resolveTenantContext(
   req: Request,
@@ -29,25 +83,26 @@ export async function resolveTenantContext(
   next: NextFunction
 ): Promise<void> {
   try {
-    let company = null;
+    let company: { id: string; slug: string; name: string } | null = null;
 
     // 1. Check X-Company-ID header
     const companyIdHeader = req.headers["x-company-id"];
-    if (companyIdHeader && typeof companyIdHeader === "string") {
-      company = await prisma.company.findUnique({
-        where: { id: companyIdHeader },
-        select: { id: true, slug: true, name: true }
-      });
+    if (!company && companyIdHeader && typeof companyIdHeader === "string") {
+      company = await findCompanyById(companyIdHeader);
     }
 
     // 2. Check X-Company-Slug header
     if (!company) {
       const companySlugHeader = req.headers["x-company-slug"];
       if (companySlugHeader && typeof companySlugHeader === "string") {
-        company = await prisma.company.findUnique({
-          where: { slug: companySlugHeader },
-          select: { id: true, slug: true, name: true }
-        });
+        try {
+          company = await prisma.company.findUnique({
+            where: { slug: companySlugHeader },
+            select: { id: true, slug: true, name: true }
+          });
+        } catch {
+          // slug column might not exist — skip
+        }
       }
     }
 
@@ -56,63 +111,47 @@ export async function resolveTenantContext(
       const host = req.headers.host || "";
       const subdomain = extractSubdomain(host);
       if (subdomain && subdomain !== "www" && subdomain !== "painsolver") {
-        company = await prisma.company.findUnique({
-          where: { slug: subdomain },
-          select: { id: true, slug: true, name: true }
-        });
+        try {
+          company = await prisma.company.findUnique({
+            where: { slug: subdomain },
+            select: { id: true, slug: true, name: true }
+          });
+        } catch {
+          // slug column might not exist — skip
+        }
       }
     }
 
-    // 4. Check custom domain
-    if (!company) {
-      const host = req.headers.host || "";
-      if (host && !host.includes("localhost") && !host.includes("vercel.app")) {
-        const customDomain = await prisma.customDomain.findFirst({
-          where: { 
-            domain: host.split(":")[0],
-            status: "active"
-          },
+    // 4. Use actor's company if authenticated
+    if (!company && req.actor?.isAuthenticated && req.actor.userId) {
+      try {
+        const user = await prisma.user.findUnique({
+          where: { id: req.actor.userId },
           include: {
             company: {
               select: { id: true, slug: true, name: true }
             }
           }
         });
-        if (customDomain) {
-          company = customDomain.company;
+        if (user?.company) {
+          company = user.company;
         }
+      } catch {
+        // company relation might not exist yet — skip
       }
     }
 
-    // 5. Use actor's company if authenticated
-    if (!company && req.actor?.isAuthenticated && req.actor.userId) {
-      const user = await prisma.user.findUnique({
-        where: { id: req.actor.userId },
-        include: {
-          company: {
-            select: { id: true, slug: true, name: true }
-          }
-        }
-      });
-      if (user) {
-        company = user.company;
-      }
-    }
-
-    // 6. Fallback: use first company if none matched (demo/single-tenant mode)
+    // 5. Fallback: use first company (demo/single-tenant mode)
     if (!company) {
-      company = await prisma.company.findFirst({
-        orderBy: { createdAt: "asc" },
-        select: { id: true, slug: true, name: true }
-      });
+      company = await findFirstCompany();
     }
 
     // Set tenant context if found
     if (company) {
       req.tenant = {
         companyId: company.id,
-        companySlug: company.slug,
-        companyName: company.name
+        companySlug: company.slug || "",
+        companyName: company.name || "Company"
       };
     }
 
@@ -184,4 +223,3 @@ export function withTenant<T extends Record<string, unknown>>(
     companyId: getCompanyId(req)
   };
 }
-

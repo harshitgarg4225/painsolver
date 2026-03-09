@@ -89,44 +89,49 @@ export async function resolveActor(req: Request, _res: Response, next: NextFunct
     // ── 1. Check session cookie (real auth) ──
     const sessionToken = req.cookies?.ps_session;
     if (sessionToken) {
-      const session = await prisma.session.findUnique({
-        where: { token: sessionToken },
-        include: {
-          user: {
-            include: { company: true }
+      try {
+        const session = await prisma.session.findUnique({
+          where: { token: sessionToken },
+          include: {
+            user: {
+              include: { company: true }
+            }
           }
+        });
+
+        if (session && session.expiresAt > new Date()) {
+          const user = session.user;
+          const actorRole = mapDbRoleToActorRole(user.role);
+
+          req.actor = {
+            userId: user.id,
+            appUserId: user.appUserId || user.id,
+            email: user.email,
+            displayName: user.name,
+            segments: user.segments || [],
+            role: actorRole,
+            isAuthenticated: true,
+            accessLevel: resolveAccessLevel(actorRole, true)
+          };
+
+          // Also set authUser for route handlers that need it
+          req.authUser = {
+            id: user.id,
+            email: user.email,
+            name: user.name,
+            role: user.role,
+            companyId: user.companyId,
+            companySlug: user.company?.slug || "",
+            companyName: user.company?.name || "Company",
+            emailVerified: user.emailVerified
+          };
+
+          next();
+          return;
         }
-      });
-
-      if (session && session.expiresAt > new Date()) {
-        const user = session.user;
-        const actorRole = mapDbRoleToActorRole(user.role);
-
-        req.actor = {
-          userId: user.id,
-          appUserId: user.appUserId || user.id,
-          email: user.email,
-          displayName: user.name,
-          segments: user.segments || [],
-          role: actorRole,
-          isAuthenticated: true,
-          accessLevel: resolveAccessLevel(actorRole, true)
-        };
-
-        // Also set authUser for route handlers that need it
-        req.authUser = {
-          id: user.id,
-          email: user.email,
-          name: user.name,
-          role: user.role,
-          companyId: user.companyId,
-          companySlug: user.company.slug,
-          companyName: user.company.name,
-          emailVerified: user.emailVerified
-        };
-
-        next();
-        return;
+      } catch (sessionError) {
+        // Session table might not exist yet — fall through to other auth methods
+        console.warn("Session lookup failed (table may not exist):", (sessionError as Error).message);
       }
     }
 
