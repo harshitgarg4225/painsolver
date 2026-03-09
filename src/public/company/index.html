@@ -163,6 +163,8 @@
                   <option value="trending">Trending</option>
                   <option value="top">Top Votes</option>
                   <option value="new">Newest</option>
+                  <option value="mrr">Highest MRR</option>
+                  <option value="status_changed">Recently Updated</option>
                 </select>
               </div>
               <div class="stream-filters">
@@ -379,8 +381,21 @@
               <input id="ch-title" type="text" placeholder="What shipped?" />
             </label>
             <label>
+              Type
+              <select id="ch-type">
+                <option value="new">🆕 New</option>
+                <option value="improved">⬆️ Improved</option>
+                <option value="fixed">🔧 Fixed</option>
+                <option value="update" selected>📋 Update</option>
+              </select>
+            </label>
+            <label>
               Tags
               <input id="ch-tags" type="text" placeholder="new, improvement, api" />
+            </label>
+            <label>
+              Labels
+              <input id="ch-labels" type="text" placeholder="Payments, API, UI" />
             </label>
           </div>
           <div class="rte">

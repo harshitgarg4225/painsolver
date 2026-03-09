@@ -600,7 +600,9 @@
     var labels = {
       trending: "Trending",
       top: "Top",
-      new: "New"
+      new: "New",
+      mrr: "MRR",
+      status_changed: "Recently Updated"
     };
 
     var filterLabels = {

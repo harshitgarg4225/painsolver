@@ -1261,6 +1261,54 @@
       .join("");
   }
 
+  function showEditPostModal(post) {
+    var modal = document.createElement("div");
+    modal.className = "modal-overlay";
+    modal.innerHTML =
+      '<div class="modal-content edit-post-modal">' +
+      '<div class="modal-header"><h3><span class="ms">edit</span> Edit Post</h3>' +
+      '<button class="ghost small modal-close" type="button">&times;</button></div>' +
+      '<div class="edit-post-form">' +
+      '<label>Title<input id="edit-post-title" type="text" value="' + esc(post.title) + '" /></label>' +
+      '<label>Description<textarea id="edit-post-description" rows="5">' + esc(post.details || "") + '</textarea></label>' +
+      '<label>Tags<input id="edit-post-tags" type="text" value="' + esc((post.tags || []).join(", ")) + '" /></label>' +
+      '<div class="edit-post-actions">' +
+      '<button class="ghost" id="edit-post-cancel" type="button">Cancel</button>' +
+      '<button class="primary" id="edit-post-save" type="button">Save Changes</button>' +
+      '</div>' +
+      '</div></div>';
+    document.body.appendChild(modal);
+
+    modal.addEventListener("click", function (e) {
+      if (e.target.closest(".modal-close") || e.target.closest("#edit-post-cancel") || e.target === modal) {
+        modal.remove();
+      }
+      if (e.target.closest("#edit-post-save")) {
+        var newTitle = document.getElementById("edit-post-title").value.trim();
+        var newDesc = document.getElementById("edit-post-description").value.trim();
+        var newTags = document.getElementById("edit-post-tags").value.split(",").map(function (t) { return t.trim(); }).filter(Boolean);
+        if (!newTitle) { pushToast("error", "Title is required."); return; }
+        var saveBtn = document.getElementById("edit-post-save");
+        saveBtn.disabled = true;
+        saveBtn.textContent = "Saving...";
+        request("/api/company/posts/" + post.id, {
+          method: "PATCH",
+          body: { title: newTitle, description: newDesc, tags: newTags }
+        })
+          .then(function () {
+            pushToast("success", "Post updated!");
+            modal.remove();
+            return loadFeedback();
+          })
+          .catch(function (err) {
+            pushToast("error", err.message || "Failed to update post.");
+            saveBtn.disabled = false;
+            saveBtn.textContent = "Save Changes";
+          });
+      }
+    });
+  }
+
   function renderDetail() {
     var post = getSelectedPost();
 
@@ -1292,7 +1340,8 @@
     el.detailEmpty.classList.add("hidden");
     el.detailView.classList.remove("hidden");
 
-    el.detailTitle.textContent = post.title;
+    el.detailTitle.innerHTML = esc(post.title) +
+      '<button class="ghost tiny edit-post-btn" data-edit-post-id="' + esc(post.id) + '" type="button" title="Edit post"><span class="ms">edit</span></button>';
     el.detailCopy.textContent = post.details;
 
     el.detailOwner.innerHTML = state.members
@@ -1346,7 +1395,34 @@
       state.commentReplyTarget = null;
     }
 
-    el.detailComments.innerHTML = post.comments.length
+    // AI action buttons
+    var aiButtonsHtml =
+      '<div class="detail-ai-actions">' +
+      '<button class="ghost small ai-smart-reply-btn" data-post-id="' + esc(post.id) + '" type="button">' +
+      '<span class="ms">auto_awesome</span> Smart Reply' +
+      '</button>' +
+      '<button class="ghost small ai-summary-btn" data-post-id="' + esc(post.id) + '" type="button">' +
+      '<span class="ms">summarize</span> Summarize' +
+      '</button>' +
+      '</div>';
+
+    // Comment summary cache display
+    var commentSummaryHtml = '';
+    if (post._commentSummary) {
+      var cs = post._commentSummary;
+      commentSummaryHtml =
+        '<div class="comment-summary-card">' +
+        '<div class="comment-summary-header"><span class="ms">summarize</span> <strong>AI Summary</strong>' +
+        (post._commentSummaryAt ? '<span class="muted"> • ' + fullDate(post._commentSummaryAt) + '</span>' : '') +
+        '</div>' +
+        (cs.tldr ? '<p class="comment-summary-tldr">' + esc(cs.tldr) + '</p>' : '') +
+        (cs.keyPoints && cs.keyPoints.length ? '<div class="comment-summary-points"><strong>Key Points:</strong><ul>' +
+          cs.keyPoints.map(function(p) { return '<li>' + esc(p) + '</li>'; }).join("") + '</ul></div>' : '') +
+        (cs.sentiment ? '<span class="tag-pill sentiment-' + esc(cs.sentiment) + '">' + esc(cs.sentiment) + '</span>' : '') +
+        '</div>';
+    }
+
+    el.detailComments.innerHTML = aiButtonsHtml + commentSummaryHtml + (post.comments.length
       ? post.comments
           .map(function (comment) {
             var replyToHtml = comment.replyToAuthorName
@@ -1370,7 +1446,7 @@
             );
           })
           .join("")
-      : renderStateCard("empty", "No conversation yet", "Add a comment to start collaboration.");
+      : renderStateCard("empty", "No conversation yet", "Add a comment to start collaboration."));
 
     renderCommentReplyContext();
   }
@@ -1466,6 +1542,9 @@
         var otherIdeas = voter.otherUpvotedIdeas || [];
         var joinedDate = voter.userCreatedAt ? fullDate(voter.userCreatedAt) : "Unknown";
         var otherIdeasCount = otherIdeas.length;
+        var voterPriority = voter.priority || "none";
+        var voterLink = voter.link || "";
+        var voteId = voter.voteId || "";
         
         var otherIdeasHtml = otherIdeas.length
           ? otherIdeas
@@ -1492,6 +1571,14 @@
         var safeUserName = voter.userName || "Unknown";
         var safeUserEmail = voter.userEmail || "";
         var safeCompanyName = voter.companyName || "Unknown";
+
+        var priorityOptions = ["none", "low", "medium", "high", "critical"];
+        var prioritySelect = '<select class="voter-priority-select" data-vote-id="' + esc(voteId) + '">' +
+          priorityOptions.map(function (opt) {
+            return '<option value="' + opt + '"' + (opt === voterPriority ? ' selected' : '') + '>' +
+              opt.charAt(0).toUpperCase() + opt.slice(1) + '</option>';
+          }).join("") +
+          '</select>';
         
         return (
           '<article class="voter-card voter-card-expanded">' +
@@ -1500,6 +1587,9 @@
           '<div class="voter-info">' +
           '<strong class="voter-name">' + esc(safeUserName) + '</strong>' +
           '<span class="voter-email">' + esc(safeUserEmail) + '</span>' +
+          '</div>' +
+          '<div class="voter-priority-badge priority-' + esc(voterPriority) + '">' +
+          prioritySelect +
           '</div>' +
           '<div class="voter-mrr-badge">' +
           '<span class="mrr-value">' + esc(currency(voter.companyMrr || 0)) + '</span>' +
@@ -1518,6 +1608,14 @@
           '<div class="voter-detail">' +
           '<span class="ms">thumb_up</span>' +
           '<div><strong>Other Ideas</strong><span>' + otherIdeasCount + ' upvoted</span></div>' +
+          '</div>' +
+          '<div class="voter-detail">' +
+          '<span class="ms">link</span>' +
+          '<div><strong>Link</strong>' +
+          (voterLink
+            ? '<a href="' + esc(voterLink) + '" target="_blank" class="voter-external-link">' + esc(voterLink.replace(/^https?:\/\//, "").substring(0, 30)) + '</a>'
+            : '<button class="ghost tiny voter-add-link-btn" data-vote-id="' + esc(voteId) + '" type="button">+ Add link</button>') +
+          '</div>' +
           '</div>' +
           '<div class="voter-detail">' +
           '<span class="ms">how_to_vote</span>' +
@@ -1540,7 +1638,14 @@
           '</article>'
         );
       })
-      .join("");
+      .join("") +
+      // Total MRR footer
+      '<div class="voter-mrr-footer">' +
+      '<span class="ms">payments</span>' +
+      '<strong>Total Attached MRR:</strong> ' +
+      '<span class="mrr-footer-value">' + esc(currency(summary.totalCompanyMrr || 0)) + '</span>' +
+      '<span class="muted"> across ' + esc(String(summary.uniqueCompanies || 0)) + ' companies</span>' +
+      '</div>';
   }
 
   function renderRoadmap(roadmap) {
@@ -1744,11 +1849,24 @@
     }
 
     if (el.chPreviewTags) {
-      el.chPreviewTags.innerHTML = (entry.tags || [])
-        .map(function (tag) {
-          return '<span class="tag-pill">' + esc(tag) + "</span>";
-        })
-        .join("");
+      var entryTypeForPreview = entry.type || "update";
+      var typePreviewIcons = { "new": "new_releases", "improved": "upgrade", "fixed": "build", "update": "update" };
+      var typePreviewColors = { "new": "#00eef9", "improved": "#7c3aed", "fixed": "#f97316", "update": "#6b7280" };
+      el.chPreviewTags.innerHTML =
+        '<span class="changelog-type-badge" style="background:' + (typePreviewColors[entryTypeForPreview] || "#6b7280") + '">' +
+        '<span class="ms" style="font-size:14px">' + (typePreviewIcons[entryTypeForPreview] || "update") + '</span> ' +
+        esc(entryTypeForPreview.charAt(0).toUpperCase() + entryTypeForPreview.slice(1)) +
+        '</span>' +
+        (entry.tags || [])
+          .map(function (tag) {
+            return '<span class="tag-pill">' + esc(tag) + "</span>";
+          })
+          .join("") +
+        (entry.labels || [])
+          .map(function (label) {
+            return '<span class="changelog-label">' + esc(label) + '</span>';
+          })
+          .join("");
     }
 
     if (el.chPreviewTitle) {
@@ -1797,11 +1915,20 @@
       state.selectedChangelogId = state.changelogEntries[0] ? state.changelogEntries[0].id : "";
     }
 
+    var typeIcons = { "new": "new_releases", "improved": "upgrade", "fixed": "build", "update": "update" };
+    var typeColors = { "new": "#00eef9", "improved": "#7c3aed", "fixed": "#f97316", "update": "#6b7280" };
+
     el.changelogList.innerHTML = state.changelogEntries.length
       ? state.changelogEntries
           .map(function (entry) {
             var isActive = entry.id === state.selectedChangelogId;
             var previewText = entry.excerpt || "";
+            var entryType = entry.type || "update";
+            var typeIcon = typeIcons[entryType] || "update";
+            var typeColor = typeColors[entryType] || "#6b7280";
+            var labelsHtml = (entry.labels || []).map(function (label) {
+              return '<span class="changelog-label">' + esc(label) + '</span>';
+            }).join("");
             return (
               '<article class="changelog-item ' +
               (isActive ? "is-active" : "") +
@@ -1809,6 +1936,10 @@
               esc(entry.id) +
               '">' +
               '<div class="changelog-item-head">' +
+              '<span class="changelog-type-badge" style="background:' + typeColor + '">' +
+              '<span class="ms" style="font-size:14px">' + typeIcon + '</span> ' +
+              esc(entryType.charAt(0).toUpperCase() + entryType.slice(1)) +
+              '</span>' +
               '<strong>' +
               esc(entry.title) +
               "</strong>" +
@@ -1823,11 +1954,14 @@
               " • " +
               esc(entry.publishedAt ? fullDate(entry.publishedAt) : "Not published") +
               "</p>" +
+              '<div class="changelog-tags-row">' +
               (entry.tags || [])
                 .map(function (tag) {
                   return '<span class="tag-pill">' + esc(tag) + "</span>";
                 })
                 .join("") +
+              labelsHtml +
+              '</div>' +
               '<p class="muted">' +
               esc(previewText) +
               "</p>" +
@@ -4243,6 +4377,25 @@
           return;
         }
 
+        // Add link button
+        var addLinkBtn = target.closest(".voter-add-link-btn");
+        if (addLinkBtn) {
+          var voteIdForLink = addLinkBtn.getAttribute("data-vote-id");
+          if (voteIdForLink) {
+            var newLink = prompt("Enter external link (CRM profile, etc.):");
+            if (newLink !== null && newLink.trim()) {
+              request("/api/company/votes/" + voteIdForLink + "/link", {
+                method: "PATCH",
+                body: { link: newLink.trim() }
+              }).then(function () {
+                pushToast("success", "Link added");
+                if (state.selectedPostId) loadVoterInsights(state.selectedPostId);
+              });
+            }
+          }
+          return;
+        }
+
         var linkButton = target.closest("[data-open-post-id]");
         if (!linkButton) {
           return;
@@ -4255,6 +4408,25 @@
         }
 
         void openLinkedIdea(boardId, postId);
+      });
+
+      // Priority dropdown change
+      el.detailVoterList.addEventListener("change", function (event) {
+        var target = event.target;
+        if (!(target instanceof HTMLElement)) return;
+        var prioritySelect = target.closest(".voter-priority-select");
+        if (prioritySelect) {
+          var voteId = prioritySelect.getAttribute("data-vote-id");
+          var newPriority = prioritySelect.value;
+          if (voteId && newPriority) {
+            request("/api/company/votes/" + voteId + "/priority", {
+              method: "PATCH",
+              body: { priority: newPriority }
+            }).then(function () {
+              pushToast("success", "Priority updated to " + newPriority);
+            });
+          }
+        }
       });
     }
 
@@ -4269,6 +4441,100 @@
         if (exportBtn && state.selectedPostId) {
           exportVotersToCsv(state.selectedPostId);
         }
+      });
+    }
+
+    // ── Detail comments area: Edit, Smart Reply, Summary ──
+    if (el.detailComments) {
+      el.detailComments.addEventListener("click", function (event) {
+        var target = event.target;
+        if (!(target instanceof HTMLElement)) return;
+
+        // Smart Reply
+        var smartReplyBtn = target.closest(".ai-smart-reply-btn");
+        if (smartReplyBtn) {
+          var pId = smartReplyBtn.getAttribute("data-post-id");
+          if (!pId) return;
+          smartReplyBtn.disabled = true;
+          smartReplyBtn.innerHTML = '<span class="ms">hourglass_empty</span> Generating...';
+          request("/api/company/posts/" + pId + "/smart-reply", { method: "POST" })
+            .then(function (data) {
+              var replies = data.replies || [];
+              if (!replies.length) { pushToast("info", "No smart replies generated."); return; }
+              var modal = document.createElement("div");
+              modal.className = "modal-overlay";
+              modal.innerHTML =
+                '<div class="modal-content smart-reply-modal">' +
+                '<div class="modal-header"><h3><span class="ms">auto_awesome</span> Smart Replies</h3>' +
+                '<button class="ghost small modal-close" type="button">&times;</button></div>' +
+                '<div class="smart-reply-list">' +
+                replies.map(function (r) {
+                  return '<article class="smart-reply-card">' +
+                    '<span class="tag-pill">' + esc(r.tone || "reply") + '</span>' +
+                    '<p>' + esc(r.text) + '</p>' +
+                    '<button class="ghost small use-reply-btn" type="button">Use this reply</button>' +
+                    '</article>';
+                }).join("") +
+                '</div></div>';
+              document.body.appendChild(modal);
+              modal.addEventListener("click", function (e) {
+                if (e.target.closest(".modal-close") || e.target === modal) {
+                  modal.remove();
+                }
+                var useBtn = e.target.closest(".use-reply-btn");
+                if (useBtn) {
+                  var text = useBtn.closest(".smart-reply-card").querySelector("p").textContent;
+                  el.newComment.value = text;
+                  modal.remove();
+                }
+              });
+            })
+            .catch(function (err) { pushToast("error", err.message || "Failed to generate smart replies."); })
+            .finally(function () {
+              smartReplyBtn.disabled = false;
+              smartReplyBtn.innerHTML = '<span class="ms">auto_awesome</span> Smart Reply';
+            });
+          return;
+        }
+
+        // Comment Summary
+        var summaryBtn = target.closest(".ai-summary-btn");
+        if (summaryBtn) {
+          var sPostId = summaryBtn.getAttribute("data-post-id");
+          if (!sPostId) return;
+          summaryBtn.disabled = true;
+          summaryBtn.innerHTML = '<span class="ms">hourglass_empty</span> Summarizing...';
+          request("/api/company/posts/" + sPostId + "/comment-summary", { method: "POST" })
+            .then(function (data) {
+              var s = data.summary || {};
+              var post = getSelectedPost();
+              if (post) {
+                post._commentSummary = s;
+                post._commentSummaryAt = new Date().toISOString();
+                renderDetail();
+              }
+              pushToast("success", "Summary generated!");
+            })
+            .catch(function (err) { pushToast("error", err.message || "Failed to generate summary."); })
+            .finally(function () {
+              summaryBtn.disabled = false;
+              summaryBtn.innerHTML = '<span class="ms">summarize</span> Summarize';
+            });
+          return;
+        }
+      });
+    }
+
+    // ── Edit post button ──
+    if (el.detailTitle) {
+      el.detailTitle.addEventListener("click", function (event) {
+        var target = event.target;
+        if (!(target instanceof HTMLElement)) return;
+        var editBtn = target.closest(".edit-post-btn");
+        if (!editBtn) return;
+        var post = getSelectedPost();
+        if (!post) return;
+        showEditPostModal(post);
       });
     }
 
@@ -4650,12 +4916,17 @@
           return value.trim();
         })
         .filter(Boolean);
+      var chTypeEl = document.getElementById("ch-type");
+      var chLabelsEl = document.getElementById("ch-labels");
+      var labels = chLabelsEl ? chLabelsEl.value.split(",").map(function (v) { return v.trim(); }).filter(Boolean) : [];
       var payload = {
         entryId: el.chEditingId ? el.chEditingId.value || undefined : undefined,
         boardId: el.chBoard.value,
         title: el.chTitle.value.trim(),
         content: content,
         tags: tags,
+        type: chTypeEl ? chTypeEl.value : "update",
+        labels: labels,
         isPublished: true
       };
 
@@ -4690,12 +4961,17 @@
             return value.trim();
           })
           .filter(Boolean);
+        var chTypeElDraft = document.getElementById("ch-type");
+        var chLabelsElDraft = document.getElementById("ch-labels");
+        var labelsDraft = chLabelsElDraft ? chLabelsElDraft.value.split(",").map(function (v) { return v.trim(); }).filter(Boolean) : [];
         var payload = {
           entryId: el.chEditingId ? el.chEditingId.value || undefined : undefined,
           boardId: el.chBoard.value,
           title: el.chTitle.value.trim(),
           content: content,
           tags: tags,
+          type: chTypeElDraft ? chTypeElDraft.value : "update",
+          labels: labelsDraft,
           isPublished: false
         };
 

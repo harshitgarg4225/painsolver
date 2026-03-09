@@ -19,7 +19,7 @@ import {
 import { notifySlackStatusChange } from "../routes/slackIntegrationRoutes";
 import { notifyFreshdeskStatusChange } from "../routes/freshdeskIntegrationRoutes";
 
-export type WorkspaceSortMode = "trending" | "top" | "new";
+export type WorkspaceSortMode = "trending" | "top" | "new" | "mrr" | "status_changed";
 export type WorkspaceFilterMode =
   | "all"
   | "under_review"
@@ -86,6 +86,8 @@ export interface WorkspacePostView {
   capturedViaSupport: boolean;
   mergedIntoPostId: string | null;
   mergedSourcePostIds: string[];
+  commentSummary: string | null;
+  statusChangedAt: string | null;
   createdAt: string;
   updatedAt: string;
   comments: WorkspaceCommentView[];
@@ -109,6 +111,9 @@ export interface WorkspacePostVoterInsightView {
   companyId: string;
   companyName: string;
   companyMrr: number;
+  voteId: string;
+  priority: string;
+  link: string | null;
   voteTypesInIdea: Array<"implicit" | "explicit">;
   votedIdeaPostIds: string[];
   votedIdeaPostTitles: string[];
@@ -182,6 +187,8 @@ export interface CompanyChangelogEntryView {
   postId: string | null;
   postTitle: string | null;
   tags: string[];
+  type: string;
+  labels: string[];
   isPublished: boolean;
   createdAt: string;
   updatedAt: string;
@@ -687,6 +694,8 @@ function mapPost(post: PostWithRelations, options: PostMapOptions): WorkspacePos
     capturedViaSupport: post.implicitVoteCount > 0,
     mergedIntoPostId: post.mergedIntoPostId,
     mergedSourcePostIds: post.mergedSourcePosts.map((item) => item.id),
+    commentSummary: (post as any).commentSummary ?? null,
+    statusChangedAt: (post as any).statusChangedAt ? (post as any).statusChangedAt.toISOString() : null,
     createdAt: post.createdAt.toISOString(),
     updatedAt: post.updatedAt.toISOString(),
     comments
@@ -1162,6 +1171,15 @@ function feedbackOrderBy(sort: WorkspaceSortMode): Prisma.PostOrderByWithRelatio
     return [{ explicitVoteCount: "desc" }, { implicitVoteCount: "desc" }, { updatedAt: "desc" }];
   }
 
+  if (sort === "mrr") {
+    return [{ totalAttachedMrr: "desc" }, { explicitVoteCount: "desc" }, { updatedAt: "desc" }];
+  }
+
+  if (sort === "status_changed") {
+    return [{ statusChangedAt: "desc" }, { updatedAt: "desc" }];
+  }
+
+  // Default: trending
   return [
     { totalAttachedMrr: "desc" },
     { explicitVoteCount: "desc" },
@@ -1387,6 +1405,8 @@ function mapChangelogEntry(entry: Prisma.ChangelogEntryGetPayload<{
     postId: entry.postId,
     postTitle: entry.post?.title ?? null,
     tags: entry.tags,
+    type: entry.type ?? "update",
+    labels: entry.labels ?? [],
     isPublished: entry.isPublished,
     createdAt: entry.createdAt.toISOString(),
     updatedAt: entry.updatedAt.toISOString(),
@@ -2228,17 +2248,19 @@ export async function updatePostForCompany(input: {
   const oldStatus = normalizePostStatus(current.status);
 
   const updatedPost = await prisma.$transaction(async (tx) => {
+    const statusDidChange = current.status !== nextStatus;
     const updated = await tx.post.update({
       where: { id: input.postId },
       data: {
         status: nextStatus,
         ownerName: input.ownerName,
         eta: etaDate,
-        tags: input.tags
+        tags: input.tags,
+        ...(statusDidChange ? { statusChangedAt: new Date() } : {})
       }
     });
 
-    if (current.status !== updated.status) {
+    if (statusDidChange) {
       const voterUserIds = Array.from(new Set(current.votes.map((vote) => vote.userId))).filter(
         (id) => id !== actorUser?.id
       );
@@ -3215,6 +3237,8 @@ export async function createChangelogEntry(input: {
   title: string;
   content: string;
   tags?: string[];
+  type?: string;
+  labels?: string[];
   isPublished?: boolean;
 }): Promise<{
   id: string;
@@ -3222,6 +3246,8 @@ export async function createChangelogEntry(input: {
   content: string;
   boardId: string | null;
   tags: string[];
+  type: string;
+  labels: string[];
   isPublished: boolean;
   releasedAt: string | null;
   createdAt: string;
@@ -3239,6 +3265,8 @@ export async function createChangelogEntry(input: {
 
   const shouldPublish = input.isPublished !== false;
   const normalizedTags = Array.from(new Set((input.tags ?? []).map((tag) => tag.trim()).filter(Boolean)));
+  const normalizedLabels = Array.from(new Set((input.labels ?? []).map((l) => l.trim()).filter(Boolean)));
+  const entryType = input.type ?? "update";
 
   const entry = await prisma.$transaction(async (tx) => {
     if (input.entryId) {
@@ -3252,6 +3280,8 @@ export async function createChangelogEntry(input: {
           title: input.title.trim(),
           content: input.content,
           tags: normalizedTags,
+          type: entryType,
+          labels: normalizedLabels,
           isPublished: shouldPublish,
           publishedAt: shouldPublish ? new Date() : null
         }
@@ -3265,6 +3295,8 @@ export async function createChangelogEntry(input: {
         title: input.title.trim(),
         content: input.content,
         tags: normalizedTags,
+        type: entryType,
+        labels: normalizedLabels,
         isPublished: shouldPublish,
         publishedAt: shouldPublish ? new Date() : null
       }
@@ -3279,6 +3311,8 @@ export async function createChangelogEntry(input: {
     content: entry.content,
     boardId: entry.boardId,
     tags: entry.tags,
+    type: entry.type,
+    labels: entry.labels,
     isPublished: entry.isPublished,
     releasedAt: entry.publishedAt ? entry.publishedAt.toISOString() : null,
     createdAt: entry.createdAt.toISOString(),
@@ -3529,6 +3563,9 @@ export async function getPostVoterInsights(postId: string): Promise<WorkspacePos
         return b.attachedMrr - a.attachedMrr || a.title.localeCompare(b.title);
       });
 
+      // Use the first vote for this user in this idea for priority/link
+      const primaryVote = ideaVotes[0];
+
       return {
         userId,
         userName: user.name || user.email,
@@ -3537,6 +3574,9 @@ export async function getPostVoterInsights(postId: string): Promise<WorkspacePos
         companyId: user.company.id,
         companyName: user.company.name,
         companyMrr: user.company.monthlySpend,
+        voteId: primaryVote.id,
+        priority: (primaryVote as any).priority ?? "none",
+        link: (primaryVote as any).link ?? null,
         voteTypesInIdea: Array.from(voteTypeSet.values()).sort((a, b) => a.localeCompare(b)),
         votedIdeaPostIds: Array.from(votedPostIdSet.values()),
         votedIdeaPostTitles: Array.from(votedPostTitleSet.values()),

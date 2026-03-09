@@ -210,6 +210,9 @@ model Post {
   totalAttachedMrr  Float             @default(0)
   implicitVoteCount Int               @default(0)
   explicitVoteCount Int               @default(0)
+  statusChangedAt   DateTime?                        // When status last changed (for sorting)
+  commentSummary    String?           @db.Text        // AI-generated comment summary cache
+  commentSummaryAt  DateTime?                        // When summary was last generated
   embedding         Unsupported("vector(1536)")?
   mergedIntoPostId  String?
   board             Board             @relation(fields: [boardId], references: [id], onDelete: Cascade)
@@ -228,6 +231,7 @@ model Post {
   @@index([categoryId])
   @@index([totalAttachedMrr])
   @@index([mergedIntoPostId])
+  @@index([statusChangedAt])
 }
 
 model Vote {
@@ -235,6 +239,8 @@ model Vote {
   userId        String
   postId        String
   voteType      VoteType
+  priority      String      @default("none") // none, low, medium, high, critical
+  link          String?     // External link (CRM profile, etc.)
   aiActionLogId String?
   user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
   post          Post        @relation(fields: [postId], references: [id], onDelete: Cascade)
@@ -284,6 +290,9 @@ model Comment {
   authorId         String
   value            String    @db.Text
   isPrivate        Boolean   @default(false)
+  isPinned         Boolean   @default(false)
+  likeCount        Int       @default(0)
+  likedByUserIds   String[]  @default([])
   replyToCommentId String?
   images           String[]  @default([])
   post             Post      @relation(fields: [postId], references: [id], onDelete: Cascade)
@@ -305,6 +314,8 @@ model ChangelogEntry {
   title       String
   content     String   @db.Text
   tags        String[] @default([])
+  type        String   @default("update") // new, improved, fixed, update
+  labels      String[] @default([])       // Product area labels
   isPublished Boolean  @default(false)
   publishedAt DateTime?
   post        Post?    @relation(fields: [postId], references: [id], onDelete: Cascade)

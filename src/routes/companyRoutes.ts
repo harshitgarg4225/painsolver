@@ -52,7 +52,7 @@ import {
 
 const feedbackQuerySchema = z.object({
   boardId: z.string().optional(),
-  sort: z.enum(["trending", "top", "new"]).optional(),
+  sort: z.enum(["trending", "top", "new", "mrr", "status_changed"]).optional(),
   filter: z.enum(["all", "under_review", "upcoming", "planned", "in_progress", "complete"]).optional(),
   q: z.string().optional(),
   includeMerged: z.string().optional()
@@ -68,7 +68,9 @@ const updatePostSchema = z.object({
   status: z.enum(["under_review", "upcoming", "planned", "in_progress", "complete"]).optional(),
   ownerName: z.string().min(1).optional(),
   eta: z.string().nullable().optional(),
-  tags: z.array(z.string()).optional()
+  tags: z.array(z.string()).optional(),
+  title: z.string().min(1).optional(),
+  description: z.string().optional()
 });
 
 const mergeTriageSchema = z.object({
@@ -94,6 +96,8 @@ const createChangelogSchema = z.object({
   title: z.string().min(1),
   content: z.string().min(1),
   tags: z.array(z.string()).optional(),
+  type: z.enum(["new", "improved", "fixed", "update"]).optional(),
+  labels: z.array(z.string()).optional(),
   isPublished: z.boolean().optional()
 });
 
@@ -561,6 +565,17 @@ companyRoutes.patch("/posts/:postId", async (req, res) => {
     return;
   }
 
+  // Handle title/description update separately if provided
+  if (parsed.data.title !== undefined || parsed.data.description !== undefined) {
+    await prisma.post.update({
+      where: { id: req.params.postId },
+      data: {
+        ...(parsed.data.title ? { title: parsed.data.title.trim() } : {}),
+        ...(parsed.data.description !== undefined ? { description: parsed.data.description } : {}),
+      },
+    });
+  }
+
   const post = await updatePostForCompany({
     postId: req.params.postId,
     actor: req.actor,
@@ -822,6 +837,8 @@ companyRoutes.post("/changelog", async (req, res) => {
     title: parsed.data.title,
     content: parsed.data.content,
     tags: parsed.data.tags,
+    type: parsed.data.type,
+    labels: parsed.data.labels,
     isPublished: parsed.data.isPublished
   });
   res.status(parsed.data.entryId ? 200 : 201).json({ entry });
@@ -912,4 +929,195 @@ companyRoutes.patch("/access-requests/:requestId", async (req, res) => {
   }
 
   res.status(200).json({ request });
+});
+
+// ── Voter Priority & Link ──
+const updateVoterPrioritySchema = z.object({
+  priority: z.enum(["none", "low", "medium", "high", "critical"]),
+});
+const updateVoterLinkSchema = z.object({
+  link: z.string().optional(),
+});
+
+companyRoutes.patch("/votes/:voteId/priority", async (req, res) => {
+  const parsed = updateVoterPrioritySchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Invalid priority", details: parsed.error.flatten() });
+    return;
+  }
+  try {
+    const vote = await prisma.vote.update({
+      where: { id: req.params.voteId },
+      data: { priority: parsed.data.priority },
+    });
+    res.status(200).json({ vote: { id: vote.id, priority: vote.priority } });
+  } catch {
+    res.status(404).json({ error: "Vote not found" });
+  }
+});
+
+companyRoutes.patch("/votes/:voteId/link", async (req, res) => {
+  const parsed = updateVoterLinkSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Invalid link", details: parsed.error.flatten() });
+    return;
+  }
+  try {
+    const vote = await prisma.vote.update({
+      where: { id: req.params.voteId },
+      data: { link: parsed.data.link ?? null },
+    });
+    res.status(200).json({ vote: { id: vote.id, link: vote.link } });
+  } catch {
+    res.status(404).json({ error: "Vote not found" });
+  }
+});
+
+// ── AI Smart Reply ──
+companyRoutes.post("/posts/:postId/smart-reply", async (req, res) => {
+  try {
+    const post = await prisma.post.findUnique({
+      where: { id: req.params.postId },
+      include: {
+        comments: {
+          orderBy: { createdAt: "desc" },
+          take: 20,
+          include: { author: { select: { name: true, role: true } } },
+        },
+        votes: { select: { id: true } },
+        category: { select: { name: true } },
+        board: { select: { name: true } },
+      },
+    });
+    if (!post) {
+      res.status(404).json({ error: "Post not found" });
+      return;
+    }
+
+    const { extractIntentFromTicket } = await import("../services/openaiService");
+    const commentThread = post.comments.map(
+      (c: any) => `[${c.author?.name || "User"} (${c.author?.role || "customer"})]: ${c.value}`
+    ).join("\n");
+
+    const prompt = `You are a Product Manager responding to customer feedback.
+
+Post Title: ${post.title}
+Post Description: ${post.description}
+Status: ${post.status}
+Category: ${post.category?.name || "General"}
+Board: ${post.board?.name || "Default"}
+Votes: ${post.votes.length}
+
+Recent comments:
+${commentThread || "(no comments yet)"}
+
+Generate 3 different professional, empathetic responses the PM could send. Each should:
+1. Acknowledge the feedback
+2. Reference the current status naturally
+3. Be concise (2-3 sentences max)
+4. End with a forward-looking statement
+
+Return as JSON: { "replies": [{ "tone": "empathetic|informative|action-oriented", "text": "..." }] }`;
+
+    const result = await extractIntentFromTicket(prompt);
+    let replies = [];
+    try {
+      const parsed = JSON.parse(result.intent || "{}");
+      replies = parsed.replies || [];
+    } catch {
+      replies = [{ tone: "empathetic", text: result.intent || "Thank you for your feedback. We are reviewing this carefully." }];
+    }
+    res.status(200).json({ replies });
+  } catch (err: any) {
+    console.error("[smart-reply]", err);
+    res.status(500).json({ error: "Failed to generate smart replies" });
+  }
+});
+
+// ── AI Comment Summary ──
+companyRoutes.post("/posts/:postId/comment-summary", async (req, res) => {
+  try {
+    const post = await prisma.post.findUnique({
+      where: { id: req.params.postId },
+      include: {
+        comments: {
+          orderBy: { createdAt: "asc" },
+          take: 50,
+          include: { author: { select: { name: true, role: true } } },
+        },
+        category: { select: { name: true } },
+      },
+    });
+    if (!post) {
+      res.status(404).json({ error: "Post not found" });
+      return;
+    }
+    if (!post.comments.length) {
+      res.status(200).json({ summary: "No comments to summarize yet." });
+      return;
+    }
+
+    const { extractIntentFromTicket } = await import("../services/openaiService");
+    const commentThread = post.comments.map(
+      (c: any) => `[${c.author?.name || "User"} (${c.author?.role || "customer"})]: ${c.value}`
+    ).join("\n");
+
+    const prompt = `Summarize the following discussion thread about a product feedback post.
+
+Post: "${post.title}"
+Category: ${post.category?.name || "General"}
+Status: ${post.status}
+
+Comments (${post.comments.length} total):
+${commentThread}
+
+Provide a structured summary in JSON:
+{
+  "tldr": "One sentence TL;DR",
+  "keyPoints": ["Point 1", "Point 2", ...],
+  "sentiment": "positive|mixed|negative",
+  "actionItems": ["Action 1", ...],
+  "topRequests": ["Request 1", ...]
+}`;
+
+    const result = await extractIntentFromTicket(prompt);
+    let summary: any = {};
+    try {
+      summary = JSON.parse(result.intent || "{}");
+    } catch {
+      summary = { tldr: result.intent || "Could not generate summary.", keyPoints: [], sentiment: "mixed", actionItems: [], topRequests: [] };
+    }
+
+    // Cache the summary
+    await prisma.post.update({
+      where: { id: req.params.postId },
+      data: { commentSummary: JSON.stringify(summary), commentSummaryAt: new Date() },
+    });
+
+    res.status(200).json({ summary });
+  } catch (err: any) {
+    console.error("[comment-summary]", err);
+    res.status(500).json({ error: "Failed to generate comment summary" });
+  }
+});
+
+// ── Get cached comment summary ──
+companyRoutes.get("/posts/:postId/comment-summary", async (req, res) => {
+  try {
+    const post = await prisma.post.findUnique({
+      where: { id: req.params.postId },
+      select: { commentSummary: true, commentSummaryAt: true },
+    });
+    if (!post || !post.commentSummary) {
+      res.status(200).json({ summary: null });
+      return;
+    }
+    try {
+      res.status(200).json({ summary: JSON.parse(post.commentSummary), generatedAt: post.commentSummaryAt });
+    } catch {
+      res.status(200).json({ summary: { tldr: post.commentSummary }, generatedAt: post.commentSummaryAt });
+    }
+  } catch {
+    res.status(500).json({ error: "Failed to fetch summary" });
+  }
 });

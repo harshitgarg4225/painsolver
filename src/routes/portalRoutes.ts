@@ -26,7 +26,7 @@ import {
 } from "../services/workspaceDataService";
 
 const feedbackQuerySchema = z.object({
-  sort: z.enum(["trending", "top", "new"]).optional(),
+  sort: z.enum(["trending", "top", "new", "mrr", "status_changed"]).optional(),
   filter: z.enum(["all", "under_review", "upcoming", "planned", "in_progress", "complete"]).optional(),
   q: z.string().optional()
 });
