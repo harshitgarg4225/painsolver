@@ -91,6 +91,7 @@ model Company {
   monthlySpend     Float    @default(0)
   healthStatus     String   @default("unknown")
   stripeCustomerId String?  @unique
+  cannyCompanyId   String?  @unique  // For Canny migration mapping
   
   // Tenant-owned resources
   users            User[]
@@ -113,6 +114,7 @@ model User {
   name                 String                  @default("")
   passwordHash         String?                 // null for OAuth/SSO users
   appUserId            String?
+  cannyUserId          String?                 // For Canny migration mapping
   hmacHash             String                  @default("")
   role                 UserRole                @default(customer)
   segments             String[]                @default([])
@@ -196,6 +198,7 @@ model Post {
   id                String            @id @default(cuid())
   boardId           String
   categoryId        String
+  cannyId           String?           @unique  // For Canny migration deduplication
   title             String
   description       String            @default("")
   status            PostStatus        @default(under_review)

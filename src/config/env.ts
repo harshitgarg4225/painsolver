@@ -15,6 +15,7 @@ const envSchema = z.object({
   STRIPE_API_KEY: z.string().default("mock-stripe-key"),
   PAINSOLVER_CLIENT_SECRET: z.string().min(1).default("demo-client-secret"),
   PAINSOLVER_MASTER_API_KEY: z.string().optional(),
+  PAINSOLVER_ADMIN_KEY: z.string().default("painsolver-admin-key"),
   ALLOW_INSECURE_ACTOR_HEADERS: z
     .string()
     .optional()

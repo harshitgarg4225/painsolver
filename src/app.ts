@@ -31,6 +31,7 @@ import { slackIntegrationRoutes } from "./routes/slackIntegrationRoutes";
 import { uploadRoutes } from "./routes/uploadRoutes";
 import { customDomainRoutes } from "./routes/customDomainRoutes";
 import { tenantRoutes } from "./routes/tenantRoutes";
+import cannyMigrationRoutes from "./routes/cannyMigrationRoutes";
 import { resolveTenantContext } from "./middleware/tenantContext";
 
 export const app = express();
@@ -147,6 +148,12 @@ app.get("/dashboard", (_req, res) => {
   res.sendFile(dashboardPath);
 });
 
+app.use("/migrate-assets", express.static(path.resolve(process.cwd(), "src/public/migrate"), staticCacheOptions));
+app.get("/migrate/canny", (_req, res) => {
+  const migratePath = path.resolve(process.cwd(), "src/public/migrate/canny.html");
+  res.sendFile(migratePath);
+});
+
 app.use("/api/webhooks", webhooksRoutes);
 app.use("/api/integrations/freshdesk", freshdeskIntegrationRoutes);
 app.use("/api/integrations/zoom", zoomIntegrationRoutes);
@@ -176,6 +183,7 @@ app.use("/api/v1/changelog", changelogRoutes);
 app.use("/api/v1/pain-events", painEventsRoutes);
 app.use("/api/v1/api-credentials", apiCredentialsRoutes);
 app.use("/api/v1/sdk", sdkRoutes);
+app.use("/api/v1", cannyMigrationRoutes);
 
 app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   console.error("Unhandled server error", err);

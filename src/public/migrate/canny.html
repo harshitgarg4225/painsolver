@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Canny → PainSolver Migration</title>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { 
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; 
+      background: linear-gradient(135deg, #0a0f1a 0%, #0f172a 50%, #0a1628 100%);
+      color: #e2e8f0; 
+      min-height: 100vh;
+    }
+    .container { max-width: 640px; margin: 0 auto; padding: 40px 20px; }
+    h1 { 
+      font-family: 'Outfit', sans-serif;
+      font-size: 26px; 
+      font-weight: 700; 
+      color: #f8fafc; 
+      margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    h1 .icon { font-size: 28px; }
+    .subtitle { font-size: 13px; color: #64748b; margin-bottom: 32px; }
+    .card { 
+      background: linear-gradient(145deg, #1e293b 0%, #1a2535 100%);
+      border: 1px solid #334155; 
+      border-radius: 16px; 
+      padding: 24px; 
+      margin-bottom: 16px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+    }
+    .card h3 { 
+      font-family: 'Outfit', sans-serif;
+      font-size: 16px; 
+      font-weight: 600; 
+      color: #f8fafc; 
+      margin-bottom: 20px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .card h3::before { content: '🔑'; }
+    label { 
+      display: block; 
+      font-size: 11px; 
+      font-weight: 600; 
+      color: #64748b; 
+      text-transform: uppercase; 
+      letter-spacing: 0.5px; 
+      margin-bottom: 6px; 
+    }
+    input { 
+      width: 100%; 
+      background: #0f172a; 
+      border: 1px solid #334155; 
+      border-radius: 10px; 
+      padding: 12px 14px; 
+      color: #e2e8f0; 
+      font-size: 13px; 
+      font-family: 'JetBrains Mono', monospace;
+      margin-bottom: 16px; 
+      outline: none;
+      transition: all 0.2s ease;
+    }
+    input:focus { 
+      border-color: #0d9488;
+      box-shadow: 0 0 0 3px rgba(13, 148, 136, 0.15);
+    }
+    input::placeholder { color: #475569; }
+    button { 
+      border: none; 
+      border-radius: 12px; 
+      padding: 14px 28px; 
+      font-size: 14px; 
+      font-weight: 600; 
+      color: #fff; 
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn-primary { 
+      background: linear-gradient(135deg, #0d9488 0%, #0f766e 100%);
+      box-shadow: 0 4px 12px rgba(13, 148, 136, 0.3);
+    }
+    .btn-primary:hover:not(:disabled) {
+      transform: translateY(-1px);
+      box-shadow: 0 6px 16px rgba(13, 148, 136, 0.4);
+    }
+    .error { 
+      background: linear-gradient(135deg, #451a1a 0%, #3b1515 100%);
+      border: 1px solid #7f1d1d; 
+      border-radius: 10px; 
+      padding: 14px; 
+      color: #fca5a5; 
+      font-size: 13px; 
+      margin-bottom: 16px; 
+    }
+    .success { 
+      background: linear-gradient(135deg, #052e16 0%, #042713 100%);
+      border: 1px solid #166534; 
+      border-radius: 12px; 
+      padding: 18px; 
+      color: #4ade80; 
+      margin-bottom: 16px; 
+    }
+    .success strong { display: block; font-size: 15px; margin-bottom: 10px; }
+    .log-box { 
+      max-height: 350px; 
+      overflow-y: auto; 
+      font-family: 'JetBrains Mono', monospace; 
+      font-size: 11px; 
+      line-height: 2;
+      padding: 12px;
+      background: #0a0f1a;
+      border-radius: 10px;
+      border: 1px solid #1e293b;
+    }
+    .log-info { color: #94a3b8; }
+    .log-warn { color: #fbbf24; }
+    .log-error { color: #f87171; }
+    .log-success { color: #4ade80; }
+    .stats-grid { 
+      display: grid; 
+      grid-template-columns: repeat(4, 1fr); 
+      gap: 10px; 
+      margin-bottom: 16px; 
+    }
+    .stat { 
+      background: linear-gradient(145deg, #0f172a 0%, #0a1220 100%);
+      border: 1px solid #1e293b;
+      border-radius: 10px; 
+      padding: 14px; 
+      text-align: center; 
+    }
+    .stat-val { 
+      font-family: 'Outfit', sans-serif;
+      font-size: 26px; 
+      font-weight: 700; 
+      color: #f8fafc; 
+    }
+    .stat-label { font-size: 10px; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; }
+    .note { 
+      background: linear-gradient(135deg, rgba(13, 148, 136, 0.1) 0%, rgba(13, 148, 136, 0.05) 100%);
+      border: 1px solid rgba(13, 148, 136, 0.25); 
+      border-radius: 10px; 
+      padding: 14px; 
+      font-size: 12px; 
+      color: #5eead4; 
+      margin-bottom: 20px;
+      line-height: 1.6;
+    }
+    .note strong { color: #2dd4bf; }
+    #progress-steps { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 20px; }
+    .step { 
+      border-radius: 10px; 
+      padding: 8px 14px; 
+      font-size: 12px; 
+      border: 1px solid #334155; 
+      color: #64748b;
+      background: #1e293b;
+      transition: all 0.3s ease;
+    }
+    .step.done { 
+      background: linear-gradient(135deg, #052e16 0%, #042713 100%);
+      border-color: #166534; 
+      color: #4ade80; 
+    }
+    .step.running { 
+      background: linear-gradient(135deg, #422006 0%, #3b1c05 100%);
+      border-color: #a16207; 
+      color: #fbbf24;
+      animation: pulse 1.5s infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.7; }
+    }
+    .brand { 
+      display: flex; 
+      align-items: center; 
+      gap: 6px; 
+      margin-bottom: 24px;
+      padding-bottom: 24px;
+      border-bottom: 1px solid #1e293b;
+    }
+    .brand-logo {
+      width: 32px;
+      height: 32px;
+      background: linear-gradient(135deg, #0d9488 0%, #0f766e 100%);
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+    }
+    .brand-name {
+      font-family: 'Outfit', sans-serif;
+      font-size: 18px;
+      font-weight: 700;
+      color: #f8fafc;
+    }
+    .progress-title {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .spinner {
+      width: 20px;
+      height: 20px;
+      border: 2px solid #334155;
+      border-top-color: #0d9488;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="brand">
+      <div class="brand-logo">💡</div>
+      <div class="brand-name">PainSolver</div>
+    </div>
+
+    <h1><span class="icon">🔄</span> Canny Migration</h1>
+    <p class="subtitle">Import your boards, posts, votes, and comments from Canny to PainSolver</p>
+
+    <div class="card" id="config-card">
+      <h3>API Credentials</h3>
+      
+      <div class="note">
+        <strong>Where to find your Canny API key:</strong><br>
+        Go to Canny → Settings → API → Copy your secret API key
+      </div>
+
+      <label>Canny API Key</label>
+      <input type="password" id="cannyKey" placeholder="Your Canny secret API key">
+      
+      <label>PainSolver Admin Key</label>
+      <input type="password" id="psKey" placeholder="Your PAINSOLVER_ADMIN_KEY from environment">
+      
+      <div id="error-box" class="error" style="display:none"></div>
+      <button class="btn-primary" id="btn-start" onclick="startMigration()">
+        🚀 Start Migration
+      </button>
+    </div>
+
+    <div class="card" id="progress-card" style="display:none">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
+        <h3 id="progress-title" style="margin:0" class="progress-title">
+          <div class="spinner"></div>
+          Migrating...
+        </h3>
+      </div>
+      <div id="progress-steps"></div>
+      <div id="result-box" style="display:none"></div>
+      <div class="log-box" id="log-box"></div>
+    </div>
+  </div>
+
+  <script>
+    const STEPS = ["boards","categories","companies","users","posts","votes","comments","changelog"];
+
+    function log(msg, type = "info") {
+      const box = document.getElementById("log-box");
+      const ts = new Date().toLocaleTimeString();
+      box.innerHTML += `<div class="log-${type}"><span style="color:#475569;margin-right:8px">${ts}</span>${msg}</div>`;
+      box.scrollTop = box.scrollHeight;
+    }
+
+    function updateStep(step, status) {
+      const el = document.getElementById(`step-${step}`);
+      if (el) {
+        el.className = `step ${status}`;
+        el.textContent = (status === "done" ? "✅ " : status === "running" ? "⏳ " : "⬜ ") + step;
+      }
+    }
+
+    async function startMigration() {
+      const cannyKey = document.getElementById("cannyKey").value.trim();
+      const psKey = document.getElementById("psKey").value.trim();
+      const errBox = document.getElementById("error-box");
+
+      if (!cannyKey || !psKey) {
+        errBox.style.display = "block";
+        errBox.textContent = "Both API keys are required.";
+        return;
+      }
+      errBox.style.display = "none";
+
+      // Show progress
+      document.getElementById("progress-card").style.display = "block";
+      document.getElementById("btn-start").disabled = true;
+      document.getElementById("btn-start").textContent = "⏳ Migration running...";
+
+      // Render step indicators
+      const stepsEl = document.getElementById("progress-steps");
+      stepsEl.innerHTML = STEPS.map(s => `<div class="step" id="step-${s}">⬜ ${s}</div>`).join("");
+
+      log("Starting server-side migration...");
+      log("Sending request to /api/v1/migrate/canny");
+
+      // Show steps as running one by one via simulated progress
+      let stepIdx = 0;
+      const stepTimer = setInterval(() => {
+        if (stepIdx < STEPS.length) {
+          if (stepIdx > 0) updateStep(STEPS[stepIdx - 1], "done");
+          updateStep(STEPS[stepIdx], "running");
+          log(`Processing ${STEPS[stepIdx]}...`);
+          stepIdx++;
+        }
+      }, 3000);
+
+      try {
+        const res = await fetch("/api/v1/migrate/canny", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-admin-key": psKey,
+          },
+          body: JSON.stringify({ cannyApiKey: cannyKey }),
+        });
+
+        clearInterval(stepTimer);
+        const data = await res.json();
+
+        // Mark all steps done
+        STEPS.forEach(s => updateStep(s, "done"));
+
+        if (data.success) {
+          document.getElementById("progress-title").innerHTML = "✅ Migration Complete";
+          const rb = document.getElementById("result-box");
+          rb.style.display = "block";
+          rb.innerHTML = `
+            <div class="success">
+              <strong>🎉 Migration finished in ${(data.durationMs / 1000).toFixed(1)}s</strong>
+              <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:12px;">
+                <div class="stat"><div class="stat-val">${data.boards}</div><div class="stat-label">Boards</div></div>
+                <div class="stat"><div class="stat-val">${data.categories}</div><div class="stat-label">Categories</div></div>
+                <div class="stat"><div class="stat-val">${data.users}</div><div class="stat-label">Users</div></div>
+                <div class="stat"><div class="stat-val">${data.companies}</div><div class="stat-label">Companies</div></div>
+                <div class="stat"><div class="stat-val">${data.posts}</div><div class="stat-label">Posts</div></div>
+                <div class="stat"><div class="stat-val">${data.votes}</div><div class="stat-label">Votes</div></div>
+                <div class="stat"><div class="stat-val">${data.comments}</div><div class="stat-label">Comments</div></div>
+                <div class="stat"><div class="stat-val">${data.changelog}</div><div class="stat-label">Changelog</div></div>
+              </div>
+              ${data.errors?.length ? `<br><span style="color:#fbbf24">⚠️ ${data.errors.length} warnings (see log below)</span>` : ""}
+            </div>
+          `;
+          log(`Done! ${data.posts} posts, ${data.votes} votes, ${data.comments} comments migrated.`, "success");
+          if (data.errors?.length) {
+            data.errors.forEach(e => log(e, "warn"));
+          }
+        } else {
+          throw new Error(data.errors?.[data.errors.length - 1] || "Migration failed");
+        }
+      } catch (err) {
+        clearInterval(stepTimer);
+        log("Migration failed: " + err.message, "error");
+        document.getElementById("progress-title").innerHTML = "❌ Migration Failed";
+        errBox.style.display = "block";
+        errBox.textContent = err.message;
+      }
+
+      document.getElementById("btn-start").disabled = false;
+      document.getElementById("btn-start").textContent = "🔄 Re-run Migration";
+    }
+  </script>
+</body>
+</html>
+
