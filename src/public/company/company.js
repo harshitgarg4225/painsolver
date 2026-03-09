@@ -973,13 +973,13 @@
       ["Boards", state.summary.boardCount],
       ["Posts", state.summary.postCount],
       ["AI Inbox", state.summary.triageCount],
-      ["Attached MRR", currency(state.summary.totalAttachedMrr)]
+      ["MRR", currency(state.summary.totalAttachedMrr)]
     ]
       .map(function (item) {
         return (
           '<article class="deck-metric">' +
-          '<h4>' + esc(item[0]) + '</h4>' +
           '<strong>' + esc(item[1]) + '</strong>' +
+          '<span>' + esc(item[0]) + '</span>' +
           '</article>'
         );
       })
@@ -1246,30 +1246,38 @@
         var isSelected = state.selectedPostIds.indexOf(post.id) !== -1;
         var tags = Array.isArray(post.tags) ? post.tags : [];
         var mergedCount = Array.isArray(post.mergedSourcePostIds) ? post.mergedSourcePostIds.length : 0;
+        var ownerInitial = (post.ownerName || "?").charAt(0).toUpperCase();
+        var descPreview = (post.details || "").length > 140 ? post.details.substring(0, 140) + "…" : (post.details || "");
 
         return (
           '<article class="feedback-card ' + (isActive ? "is-active" : "") + '" data-post-id="' + esc(post.id) + '">' +
+          '<div class="feedback-vote-col">' +
+          '<button class="vote-arrow" type="button" title="Upvote"><span class="ms">arrow_drop_up</span></button>' +
+          '<span class="vote-count">' + esc(post.voteCount) + '</span>' +
+          '</div>' +
+          '<div class="feedback-card-body">' +
           '<div class="feedback-card-head">' +
-          '<label class="select-post">' +
-          '<input class="post-select" data-select-post-id="' + esc(post.id) + '" type="checkbox" ' + (isSelected ? "checked" : "") + " />" +
-          "</label>" +
+          '<label class="select-post" onclick="event.stopPropagation()">' +
+          '<input class="post-select" data-select-post-id="' + esc(post.id) + '" type="checkbox" ' + (isSelected ? "checked" : "") + ' />' +
+          '</label>' +
           '<h4>' + esc(post.title) + '</h4>' +
           '<span class="status-pill status-' + esc(post.status) + '">' + esc(statusLabel(post.status)) + '</span>' +
           '</div>' +
-          '<p>' + esc(post.details) + '</p>' +
-          '<div class="meta-row">' +
-          '<span>' + esc(post.voteCount) + ' votes</span>' +
-          '<span>' + esc(post.commentCount) + ' comments</span>' +
-          '<span>' + esc(currency(post.attachedMrr)) + ' MRR</span>' +
-          '<span>Owner: ' + esc(post.ownerName || "Unassigned") + '</span>' +
-          '<span>ETA: ' + esc(shortDate(post.eta) || "TBD") + '</span>' +
-          (post.capturedViaSupport ? '<span class="support-pill">Captured via Support</span>' : "") +
-          (mergedCount ? '<span class="tag-pill">Merged ' + esc(mergedCount) + "</span>" : "") +
-          '</div>' +
-          '<div class="tag-row">' +
+          (descPreview ? '<p class="feedback-card-desc">' + esc(descPreview) + '</p>' : '') +
+          '<div class="feedback-card-footer">' +
+          '<span class="meta-pill"><span class="ms">chat_bubble_outline</span> ' + esc(post.commentCount) + '</span>' +
+          '<span class="meta-dot">·</span>' +
+          '<span class="meta-pill"><span class="ms">attach_money</span> ' + esc(currency(post.attachedMrr)) + '</span>' +
+          (post.ownerName && post.ownerName !== "Unassigned"
+            ? '<span class="meta-dot">·</span><span class="owner-pill"><span class="owner-avatar">' + esc(ownerInitial) + '</span> ' + esc(post.ownerName) + '</span>'
+            : '') +
+          (post.eta ? '<span class="meta-dot">·</span><span class="meta-pill"><span class="ms">event</span> ' + esc(shortDate(post.eta)) + '</span>' : '') +
+          (post.capturedViaSupport ? '<span class="meta-dot">·</span><span class="meta-pill"><span class="ms">support_agent</span> Support</span>' : '') +
+          (mergedCount ? '<span class="meta-dot">·</span><span class="tag-pill">⊕ ' + esc(mergedCount) + ' merged</span>' : '') +
           tags.map(function (tag) {
             return '<span class="tag-pill">' + esc(tag) + '</span>';
           }).join("") +
+          '</div>' +
           '</div>' +
           '</article>'
         );

@@ -799,12 +799,24 @@
             "</div>"
           : '<p class="feedback-empty-comments">' + esc(state.isLoggedIn ? "You need board write access to comment." : "Log in to comment.") + "</p>";
 
+        var descPreview = shortText(post.details, 140);
+
         return (
           '<article class="feedback-item ' +
           (isExpanded ? "is-expanded" : "") +
           '" data-post-id="' +
           esc(post.id) +
           '">' +
+          '<div class="vote-stack">' +
+          '<button class="vote-btn" data-vote-id="' +
+          esc(post.id) +
+          '" type="button" ' +
+          (!state.isLoggedIn || !access.canPost ? "disabled" : "") +
+          '><span class="ms" style="font-size:20px">arrow_drop_up</span></button>' +
+          "<strong>" +
+          esc(post.voteCount) +
+          "</strong>" +
+          "</div>" +
           '<div class="feedback-main" data-expand-id="' +
           esc(post.id) +
           '" role="button" tabindex="0" aria-expanded="' +
@@ -813,43 +825,22 @@
           "<h3>" +
           esc(post.title) +
           "</h3>" +
-          "<p>" +
-          esc(shortText(post.details, 200)) +
-          "</p>" +
+          (descPreview ? '<p class="desc-preview">' + esc(descPreview) + '</p>' : '') +
           '<div class="meta">' +
-          "<span>" +
+          '<span class="status-chip s-' + esc(post.status) + '">' +
           esc(statusLabel(post.status)) +
-          "</span>" +
-          "<span>" +
-          esc(post.commentCount) +
-          " comments</span>" +
-          "<span>" +
-          esc(formatCurrency(post.attachedMrr)) +
-          " MRR</span>" +
-          (post.capturedViaSupport ? '<span class="badge">Captured via Support</span>' : "") +
+          '</span>' +
+          '<span class="meta-sep">·</span>' +
+          '<span>' + esc(post.commentCount) + ' comments</span>' +
+          '<span class="meta-sep">·</span>' +
+          '<span>' + esc(formatCurrency(post.attachedMrr)) + ' MRR</span>' +
+          (post.capturedViaSupport ? '<span class="meta-sep">·</span><span class="badge">Support</span>' : "") +
           "</div>" +
-          "</div>" +
-          '<div class="vote-stack">' +
-          '<button class="vote-btn" data-vote-id="' +
-          esc(post.id) +
-          '" type="button" ' +
-          (!state.isLoggedIn || !access.canPost ? "disabled" : "") +
-          ">^</button>" +
-          "<strong>" +
-          esc(post.voteCount) +
-          "</strong>" +
-          "</div>" +
-          '<div class="feedback-actions">' +
-          '<button class="ghost small expand-toggle" data-expand-id="' +
-          esc(post.id) +
-          '" type="button">' +
-          esc(isExpanded ? "Hide Details" : "View Details") +
-          "</button>" +
           "</div>" +
           '<section class="feedback-detail ' +
           (isExpanded ? "" : "hidden") +
           '">' +
-          "<h4>Post Details</h4>" +
+          '<h4><span class="ms" style="font-size:16px">description</span> Details</h4>' +
           '<p class="detail-copy">' +
           esc(post.details) +
           "</p>" +
@@ -866,7 +857,7 @@
               "</span>"
             : "") +
           "</div>" +
-          "<h4>Comment Thread</h4>" +
+          '<h4><span class="ms" style="font-size:16px">chat</span> Comments (' + esc(comments.length) + ')</h4>' +
           '<div class="comment-thread">' +
           commentsHtml +
           "</div>" +
