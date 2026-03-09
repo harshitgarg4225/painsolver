@@ -82,9 +82,10 @@ const createIdeaFromTriageSchema = z.object({
 });
 
 const updateTriageConfigSchema = z.object({
-  source: z.enum(["freshdesk", "zoom"]),
+  source: z.enum(["freshdesk", "zoom", "slack"]),
   routingMode: z.enum(["central", "individual"]),
-  enabled: z.boolean()
+  enabled: z.boolean(),
+  similarityThreshold: z.number().min(0.5).max(0.99).optional()
 });
 
 const createChangelogSchema = z.object({
@@ -707,6 +708,26 @@ companyRoutes.post("/triage/:painEventId/merge", async (req, res) => {
     res.status(404).json({ error: "Pain event or post not found" });
     return;
   }
+
+  res.status(200).json({ ok: true });
+});
+
+companyRoutes.post("/triage/:painEventId/dismiss", async (req, res) => {
+  const { painEventId } = req.params;
+  
+  const painEvent = await prisma.painEvent.findUnique({
+    where: { id: painEventId }
+  });
+
+  if (!painEvent) {
+    res.status(404).json({ error: "Pain event not found" });
+    return;
+  }
+
+  await prisma.painEvent.update({
+    where: { id: painEventId },
+    data: { status: "dismissed" }
+  });
 
   res.status(200).json({ ok: true });
 });

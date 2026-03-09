@@ -1887,7 +1887,12 @@
     if (status === "auto_merged") {
       return "Merged";
     }
-
+    if (status === "dismissed") {
+      return "Dismissed";
+    }
+    if (status === "skipped") {
+      return "Skipped";
+    }
     return "Needs triage";
   }
 
@@ -2559,10 +2564,13 @@
               '<div class="triage-badges">' +
               categoryBadge +
               '<span class="status-pill status-' +
-              esc(event.status === "auto_merged" ? "complete" : "under_review") +
+              esc(event.status === "auto_merged" ? "complete" : event.status === "dismissed" ? "dismissed" : "under_review") +
               '">' +
               esc(triageStatusLabel(event.status)) +
               "</span>" +
+              (event.status !== "auto_merged" && event.status !== "dismissed" 
+                ? '<button class="ghost small dismiss-btn" data-dismiss-id="' + esc(event.id) + '" type="button" title="Dismiss this item"><span class="ms">close</span></button>'
+                : "") +
               "</div>" +
               "</div>" +
               (keywordsHtml ? '<div class="ai-keywords-row">' + keywordsHtml + '</div>' : '') +
@@ -4826,6 +4834,31 @@
           return;
         }
 
+        // Dismiss button handler
+        var dismissButton = target.closest("[data-dismiss-id]");
+        var dismissId = dismissButton ? dismissButton.getAttribute("data-dismiss-id") : null;
+        if (dismissId) {
+          if (dismissButton instanceof HTMLButtonElement) {
+            setButtonBusy(dismissButton, true, "...");
+          }
+          request("/api/company/triage/" + encodeURIComponent(dismissId) + "/dismiss", {
+            method: "POST"
+          })
+            .then(function () {
+              pushToast("success", "Item dismissed.");
+              return loadTriage();
+            })
+            .catch(function (error) {
+              pushToast("error", error.message || "Failed to dismiss triage item.");
+            })
+            .finally(function () {
+              if (dismissButton instanceof HTMLButtonElement) {
+                setButtonBusy(dismissButton, false);
+              }
+            });
+          return;
+        }
+
         var mergeButton = target.closest("[data-merge-id]");
         var mergeId = mergeButton ? mergeButton.getAttribute("data-merge-id") : null;
         if (!mergeId) {
@@ -5769,8 +5802,9 @@
     });
 
     // AI Threshold Slider
+    var thresholdSaveTimeout = null;
     if (el.aiThresholdSlider && el.aiThresholdValue) {
-      // Load saved preference
+      // Load saved preference from localStorage as initial value
       var savedThreshold = localStorage.getItem("painsolver_ai_threshold");
       if (savedThreshold) {
         el.aiThresholdSlider.value = savedThreshold;
@@ -5781,6 +5815,29 @@
         var value = el.aiThresholdSlider.value;
         el.aiThresholdValue.textContent = value + "%";
         localStorage.setItem("painsolver_ai_threshold", value);
+
+        // Debounced save to server
+        if (thresholdSaveTimeout) {
+          clearTimeout(thresholdSaveTimeout);
+        }
+        thresholdSaveTimeout = setTimeout(function () {
+          var thresholdValue = Number(value) / 100; // Convert percentage to decimal (e.g., 75 -> 0.75)
+          request("/api/company/triage/config", {
+            method: "PATCH",
+            body: {
+              source: "freshdesk",
+              routingMode: "central",
+              enabled: true,
+              similarityThreshold: thresholdValue
+            }
+          })
+            .then(function () {
+              pushToast("success", "AI threshold updated to " + value + "%");
+            })
+            .catch(function (error) {
+              pushToast("error", error.message || "Failed to save threshold.");
+            });
+        }, 500);
       });
     }
 

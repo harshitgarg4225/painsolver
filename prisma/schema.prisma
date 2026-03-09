@@ -48,6 +48,7 @@ enum PainEventStatus {
   needs_triage
   auto_merged
   skipped
+  dismissed
 }
 
 enum AiActionTaken {
@@ -396,6 +397,7 @@ model AiInboxConfig {
   source                    PainEventSource
   routingMode               AiInboxRoutingMode
   enabled                   Boolean            @default(true)
+  similarityThreshold       Float              @default(0.75)
   freshdeskDomain           String?
   freshdeskApiKey           String?            @db.Text
   freshdeskFilterField      String?

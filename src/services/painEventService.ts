@@ -1,4 +1,4 @@
-import { Prisma } from "@prisma/client";
+import { Prisma, PainEventSource } from "@prisma/client";
 
 import { env } from "../config/env";
 import { prisma } from "../db/prisma";
@@ -13,6 +13,14 @@ export interface PainEventProcessingResult {
   status: "auto_merged" | "needs_triage" | "skipped";
   similarityScore?: number;
   matchedPostId?: string | null;
+}
+
+async function getSimilarityThreshold(source: PainEventSource): Promise<number> {
+  const config = await prisma.aiInboxConfig.findUnique({
+    where: { source },
+    select: { similarityThreshold: true }
+  });
+  return config?.similarityThreshold ?? env.AI_SIMILARITY_THRESHOLD;
 }
 
 export async function processPainEvent(
@@ -63,9 +71,12 @@ export async function processPainEvent(
   const aiConfidence = extracted.confidenceLevel ?? 0.7;
   const calibratedScore = match.similarityScore * (0.5 + aiConfidence * 0.5);
 
+  // Get the configured similarity threshold for this source
+  const similarityThreshold = await getSimilarityThreshold(painEvent.source);
+
   if (
     match.post &&
-    calibratedScore > env.AI_SIMILARITY_THRESHOLD
+    calibratedScore > similarityThreshold
   ) {
     const matchedPostId = match.post.id;
 

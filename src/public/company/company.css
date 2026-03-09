@@ -1609,6 +1609,32 @@ main {
   flex-shrink: 0;
 }
 
+.triage-badges .dismiss-btn {
+  padding: 4px 8px;
+  font-size: 0.75rem;
+  color: var(--slate-500);
+  background: transparent;
+  border: 1px solid var(--slate-300);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.triage-badges .dismiss-btn:hover {
+  color: var(--red-600);
+  border-color: var(--red-400);
+  background: var(--red-50);
+}
+
+.triage-badges .dismiss-btn .ms {
+  font-size: 14px;
+}
+
+.status-pill.status-dismissed {
+  background: var(--slate-200);
+  color: var(--slate-600);
+}
+
 .ai-badge {
   display: inline-block;
   padding: 4px 10px;

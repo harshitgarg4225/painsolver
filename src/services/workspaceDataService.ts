@@ -273,7 +273,7 @@ function dedupeSegments(segments: string[]): string[] {
   return Array.from(set);
 }
 
-type AiInboxSourceKey = "freshdesk" | "zoom";
+type AiInboxSourceKey = "freshdesk" | "zoom" | "slack";
 type AiInboxRoutingModeView = "central" | "individual";
 
 const AI_INBOX_DEFAULTS: Record<AiInboxSourceKey, { routingMode: AiInboxRoutingModeView; enabled: boolean }> = {
@@ -283,6 +283,10 @@ const AI_INBOX_DEFAULTS: Record<AiInboxSourceKey, { routingMode: AiInboxRoutingM
   },
   zoom: {
     routingMode: "individual",
+    enabled: true
+  },
+  slack: {
+    routingMode: "central",
     enabled: true
   }
 };
@@ -324,6 +328,7 @@ interface AiInboxSourceConfigView {
   source: AiInboxSourceKey;
   routingMode: AiInboxRoutingModeView;
   enabled: boolean;
+  similarityThreshold: number;
   updatedAt: string;
 }
 
@@ -509,12 +514,21 @@ async function ensureAiInboxConfig(
       source: "freshdesk",
       routingMode: AI_INBOX_DEFAULTS.freshdesk.routingMode,
       enabled: AI_INBOX_DEFAULTS.freshdesk.enabled,
+      similarityThreshold: 0.75,
       updatedAt: new Date(0).toISOString()
     },
     zoom: {
       source: "zoom",
       routingMode: AI_INBOX_DEFAULTS.zoom.routingMode,
       enabled: AI_INBOX_DEFAULTS.zoom.enabled,
+      similarityThreshold: 0.75,
+      updatedAt: new Date(0).toISOString()
+    },
+    slack: {
+      source: "slack",
+      routingMode: AI_INBOX_DEFAULTS.slack.routingMode,
+      enabled: AI_INBOX_DEFAULTS.slack.enabled,
+      similarityThreshold: 0.75,
       updatedAt: new Date(0).toISOString()
     }
   };
@@ -525,6 +539,7 @@ async function ensureAiInboxConfig(
       source: key,
       routingMode: row.routingMode as AiInboxRoutingModeView,
       enabled: row.enabled,
+      similarityThreshold: row.similarityThreshold,
       updatedAt: row.updatedAt.toISOString()
     };
   });
@@ -2836,6 +2851,7 @@ export async function updateAiInboxConfig(input: {
   source: AiInboxSourceKey;
   routingMode: AiInboxRoutingModeView;
   enabled: boolean;
+  similarityThreshold?: number;
 }): Promise<AiInboxSourceConfigView> {
   const next = await prisma.aiInboxConfig.upsert({
     where: {
@@ -2843,12 +2859,14 @@ export async function updateAiInboxConfig(input: {
     },
     update: {
       routingMode: input.routingMode as AiInboxRoutingMode,
-      enabled: input.enabled
+      enabled: input.enabled,
+      ...(input.similarityThreshold !== undefined && { similarityThreshold: input.similarityThreshold })
     },
     create: {
       source: input.source as PainEventSource,
       routingMode: input.routingMode as AiInboxRoutingMode,
-      enabled: input.enabled
+      enabled: input.enabled,
+      similarityThreshold: input.similarityThreshold ?? 0.75
     }
   });
 
@@ -2856,6 +2874,7 @@ export async function updateAiInboxConfig(input: {
     source: next.source as AiInboxSourceKey,
     routingMode: next.routingMode as AiInboxRoutingModeView,
     enabled: next.enabled,
+    similarityThreshold: next.similarityThreshold,
     updatedAt: next.updatedAt.toISOString()
   };
 }
