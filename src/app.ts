@@ -85,6 +85,11 @@ app.get("/portal", (_req, res) => {
   const portalPath = path.resolve(process.cwd(), "src/public/portal/index.html");
   res.sendFile(portalPath);
 });
+// Serve portal for deep-linked post URLs: /portal/post/:postId
+app.get("/portal/post/:postId", (req, res) => {
+  // Redirect to /portal?postId=... so the SPA can handle it
+  res.redirect(301, `/portal?postId=${encodeURIComponent(req.params.postId)}`);
+});
 
 app.use("/docs-assets", express.static(path.resolve(process.cwd(), "src/public/docs"), staticCacheOptions));
 app.get("/docs", (_req, res) => {

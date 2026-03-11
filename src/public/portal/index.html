@@ -186,6 +186,59 @@
       </section>
     </main>
 
+    <!-- ═══ Login / Signup Modal ═══ -->
+    <div id="auth-modal-overlay" class="modal-overlay hidden">
+      <div class="modal-card">
+        <button id="auth-modal-close" class="modal-close" type="button" aria-label="Close">
+          <span class="ms">close</span>
+        </button>
+
+        <div class="modal-header">
+          <div class="modal-logo">P</div>
+          <h2 id="auth-modal-title">Sign in to PainSolver</h2>
+          <p id="auth-modal-subtitle">Vote, comment, and submit feedback ideas.</p>
+        </div>
+
+        <form id="auth-form" class="modal-form" autocomplete="off">
+          <div class="form-group">
+            <label for="auth-email">Email <span class="required">*</span></label>
+            <input id="auth-email" type="email" placeholder="you@company.com" required autocomplete="email" />
+          </div>
+
+          <div class="form-group">
+            <label for="auth-name">Display name</label>
+            <input id="auth-name" type="text" placeholder="Your name" autocomplete="name" />
+          </div>
+
+          <div id="auth-advanced-toggle" class="advanced-toggle">
+            <span class="ms" style="font-size:16px">tune</span> Advanced options
+          </div>
+
+          <div id="auth-advanced-fields" class="advanced-fields hidden">
+            <div class="form-group">
+              <label for="auth-app-user-id">App user ID <span class="optional">(optional)</span></label>
+              <input id="auth-app-user-id" type="text" placeholder="your-user-id" />
+            </div>
+
+            <div class="form-group">
+              <label for="auth-segments">Segments <span class="optional">(comma-separated)</span></label>
+              <input id="auth-segments" type="text" placeholder="beta, enterprise" />
+            </div>
+          </div>
+
+          <div id="auth-error" class="form-error hidden"></div>
+
+          <button id="auth-submit" class="primary auth-submit" type="submit">
+            Sign in
+          </button>
+        </form>
+
+        <p class="modal-footer-text">
+          By signing in you agree to provide feedback to improve the product.
+        </p>
+      </div>
+    </div>
+
     <script src="/portal-assets/portal.js"></script>
   </body>
 </html>

@@ -840,7 +840,12 @@
           '<section class="feedback-detail ' +
           (isExpanded ? "" : "hidden") +
           '">' +
-          '<h4><span class="ms" style="font-size:16px">description</span> Details</h4>' +
+          '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">' +
+          '<h4 style="margin:0"><span class="ms" style="font-size:16px">description</span> Details</h4>' +
+          '<button class="post-detail-share share-link-btn" data-share-post-id="' + esc(post.id) + '" type="button" title="Copy shareable link">' +
+          '<span class="ms">link</span> Share' +
+          '</button>' +
+          '</div>' +
           '<p class="detail-copy">' +
           esc(post.details) +
           "</p>" +
@@ -1385,61 +1390,149 @@
     return Promise.all([loadFeedback(), loadRoadmap()]);
   }
 
-  function startLoginFlow() {
-    var defaultEmail = state.email && state.email !== DEFAULT_EMAIL ? state.email : "";
-    var emailInput = window.prompt("Enter your work email", defaultEmail);
-    if (emailInput === null) {
-      return Promise.resolve(false);
+  // ── Auth Modal Logic ──
+  var authModal = {
+    overlay: document.getElementById("auth-modal-overlay"),
+    closeBtn: document.getElementById("auth-modal-close"),
+    form: document.getElementById("auth-form"),
+    title: document.getElementById("auth-modal-title"),
+    subtitle: document.getElementById("auth-modal-subtitle"),
+    emailInput: document.getElementById("auth-email"),
+    nameInput: document.getElementById("auth-name"),
+    appUserIdInput: document.getElementById("auth-app-user-id"),
+    segmentsInput: document.getElementById("auth-segments"),
+    advancedToggle: document.getElementById("auth-advanced-toggle"),
+    advancedFields: document.getElementById("auth-advanced-fields"),
+    errorEl: document.getElementById("auth-error"),
+    submitBtn: document.getElementById("auth-submit"),
+    _resolve: null
+  };
+
+  function openAuthModal() {
+    // Pre-fill with existing data
+    authModal.emailInput.value = state.email && state.email !== DEFAULT_EMAIL ? state.email : "";
+    authModal.nameInput.value = state.userName && state.userName !== DEFAULT_NAME ? state.userName : "";
+    authModal.appUserIdInput.value = state.appUserId && state.appUserId !== DEFAULT_APP_USER_ID ? state.appUserId : "";
+    authModal.segmentsInput.value = (state.segments || []).join(", ");
+    authModal.errorEl.classList.add("hidden");
+    authModal.errorEl.textContent = "";
+    authModal.advancedFields.classList.add("hidden");
+    authModal.submitBtn.disabled = false;
+    authModal.submitBtn.textContent = "Sign in";
+
+    authModal.overlay.classList.remove("hidden");
+
+    // Focus email field after animation
+    setTimeout(function () {
+      authModal.emailInput.focus();
+    }, 100);
+
+    return new Promise(function (resolve) {
+      authModal._resolve = resolve;
+    });
+  }
+
+  function closeAuthModal(result) {
+    authModal.overlay.classList.add("is-closing");
+    setTimeout(function () {
+      authModal.overlay.classList.add("hidden");
+      authModal.overlay.classList.remove("is-closing");
+    }, 200);
+
+    if (authModal._resolve) {
+      authModal._resolve(result || false);
+      authModal._resolve = null;
     }
+  }
 
-    var email = normalizeEmail(emailInput);
-    if (!email) {
-      pushToast("error", "Email is required.");
-      return Promise.resolve(false);
+  function showAuthError(message) {
+    authModal.errorEl.textContent = message;
+    authModal.errorEl.classList.remove("hidden");
+  }
+
+  // Close modal on overlay click
+  if (authModal.overlay) {
+    authModal.overlay.addEventListener("click", function (event) {
+      if (event.target === authModal.overlay) {
+        closeAuthModal(false);
+      }
+    });
+  }
+
+  // Close button
+  if (authModal.closeBtn) {
+    authModal.closeBtn.addEventListener("click", function () {
+      closeAuthModal(false);
+    });
+  }
+
+  // Escape key closes modal
+  document.addEventListener("keydown", function (event) {
+    if (event.key === "Escape" && !authModal.overlay.classList.contains("hidden")) {
+      closeAuthModal(false);
     }
+  });
 
-    var nameInput = window.prompt("Display name", state.userName || email.split("@")[0] || DEFAULT_NAME);
-    if (nameInput === null) {
-      return Promise.resolve(false);
-    }
+  // Advanced toggle
+  if (authModal.advancedToggle) {
+    authModal.advancedToggle.addEventListener("click", function () {
+      authModal.advancedFields.classList.toggle("hidden");
+    });
+  }
 
-    var appUserInput = window.prompt("App user ID (optional)", state.appUserId || "");
-    if (appUserInput === null) {
-      return Promise.resolve(false);
-    }
+  // Form submit
+  if (authModal.form) {
+    authModal.form.addEventListener("submit", function (event) {
+      event.preventDefault();
 
-    var segmentsInput = window.prompt("Segments (comma separated, optional)", (state.segments || []).join(", "));
-    if (segmentsInput === null) {
-      return Promise.resolve(false);
-    }
+      var email = normalizeEmail(authModal.emailInput.value);
+      if (!email) {
+        showAuthError("Please enter a valid email address.");
+        authModal.emailInput.focus();
+        return;
+      }
 
-    var payload = {
-      email: email,
-      name: String(nameInput || "").trim() || email,
-      appUserId: String(appUserInput || "").trim() || undefined,
-      segments: parseSegments(segmentsInput)
-    };
+      var name = String(authModal.nameInput.value || "").trim() || email.split("@")[0] || DEFAULT_NAME;
+      var appUserId = String(authModal.appUserIdInput.value || "").trim() || undefined;
+      var segments = parseSegments(authModal.segmentsInput.value || "");
 
-    return request("/api/portal/sso/start", {
-      method: "POST",
-      body: payload
-    })
-      .then(function (result) {
-        var session = result.session || {};
-        state.isLoggedIn = true;
-        state.email = normalizeEmail(session.email || payload.email);
-        state.userName = session.name || payload.name || DEFAULT_NAME;
-        state.appUserId = session.appUserId || payload.appUserId || DEFAULT_APP_USER_ID;
-        state.segments = Array.isArray(session.segments) ? session.segments : payload.segments;
-        state.replyTargets = {};
-        persistSession();
-        defaultSessionState();
-        return true;
+      authModal.submitBtn.disabled = true;
+      authModal.submitBtn.textContent = "Signing in...";
+      authModal.errorEl.classList.add("hidden");
+
+      var payload = {
+        email: email,
+        name: name,
+        appUserId: appUserId,
+        segments: segments
+      };
+
+      request("/api/portal/sso/start", {
+        method: "POST",
+        body: payload
       })
-      .catch(function (error) {
-        pushToast("error", error.message || "Failed to start SSO session.");
-        return false;
-      });
+        .then(function (result) {
+          var session = result.session || {};
+          state.isLoggedIn = true;
+          state.email = normalizeEmail(session.email || payload.email);
+          state.userName = session.name || payload.name || DEFAULT_NAME;
+          state.appUserId = session.appUserId || payload.appUserId || DEFAULT_APP_USER_ID;
+          state.segments = Array.isArray(session.segments) ? session.segments : payload.segments;
+          state.replyTargets = {};
+          persistSession();
+          defaultSessionState();
+          closeAuthModal(true);
+        })
+        .catch(function (error) {
+          authModal.submitBtn.disabled = false;
+          authModal.submitBtn.textContent = "Sign in";
+          showAuthError(error.message || "Sign in failed. Please try again.");
+        });
+    });
+  }
+
+  function startLoginFlow() {
+    return openAuthModal();
   }
 
   function logoutFlow() {
@@ -1469,7 +1562,75 @@
     }
 
     state.expandedPostId = state.expandedPostId === postId ? "" : postId;
+
+    // Update URL with post context
+    updateUrlForPost(state.expandedPostId);
     renderFeedback();
+
+    // Scroll expanded post into view
+    if (state.expandedPostId) {
+      setTimeout(function () {
+        var postEl = document.querySelector('[data-expand-id="' + state.expandedPostId + '"]');
+        if (postEl) {
+          postEl.scrollIntoView({ behavior: "smooth", block: "nearest" });
+        }
+      }, 50);
+    }
+  }
+
+  // ── Shareable Post URLs ──
+  function updateUrlForPost(postId) {
+    var url = new URL(window.location.href);
+    if (postId) {
+      url.searchParams.set("postId", postId);
+    } else {
+      url.searchParams.delete("postId");
+    }
+    window.history.replaceState({}, "", url.toString());
+  }
+
+  function getPostIdFromUrl() {
+    var url = new URL(window.location.href);
+    return url.searchParams.get("postId") || "";
+  }
+
+  function getShareUrl(postId) {
+    var url = new URL(window.location.href);
+    url.searchParams.set("postId", postId);
+    // Remove other query params that are session-specific
+    url.searchParams.delete("sort");
+    url.searchParams.delete("filter");
+    url.searchParams.delete("q");
+    return url.toString();
+  }
+
+  function copyShareUrl(postId) {
+    var url = getShareUrl(postId);
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(url).then(function () {
+        pushToast("success", "Link copied to clipboard!");
+      }).catch(function () {
+        fallbackCopy(url);
+      });
+    } else {
+      fallbackCopy(url);
+    }
+  }
+
+  function fallbackCopy(text) {
+    var textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.style.position = "fixed";
+    textarea.style.opacity = "0";
+    document.body.appendChild(textarea);
+    textarea.select();
+    try {
+      document.execCommand("copy");
+      pushToast("success", "Link copied to clipboard!");
+    } catch (_e) {
+      pushToast("info", "Copy this link: " + text);
+    }
+    document.body.removeChild(textarea);
   }
 
   function bindEvents() {
@@ -1545,11 +1706,7 @@
         return;
       }
 
-      var reason = window.prompt("What access do you need?");
-      if (!reason) {
-        return;
-      }
-
+      var reason = "I would like access to provide feedback on this board.";
       setButtonBusy(el.requestAccessBtn, true, "Requesting...");
       request("/api/portal/access/request", {
         method: "POST",
@@ -1794,6 +1951,16 @@
       var expandBtn = target.closest(".expand-toggle");
       if (expandBtn) {
         toggleExpand(expandBtn.getAttribute("data-expand-id"));
+        return;
+      }
+
+      // Share link button
+      var shareBtn = target.closest(".share-link-btn");
+      if (shareBtn) {
+        var sharePostId = shareBtn.getAttribute("data-share-post-id");
+        if (sharePostId) {
+          copyShareUrl(sharePostId);
+        }
         return;
       }
 
@@ -2178,13 +2345,39 @@
     renderFeedback();
     renderNotifications();
 
+    // Check for deep-linked post ID in URL
+    var deepLinkedPostId = getPostIdFromUrl();
+
     // Load portal branding first, then session and boards
     loadPortalSettings()
       .then(function () {
         return Promise.all([loadSession(), loadBoards()]);
       })
       .then(function () {
+        // If there's a deep-linked post, set it as expanded before loading feedback
+        if (deepLinkedPostId) {
+          state.expandedPostId = deepLinkedPostId;
+          // Switch to feedback tab
+          state.activeTab = "feedback";
+          renderTabs();
+        }
+
         return Promise.all([loadFeedback(), loadRoadmap(), loadChangelog(), loadNotificationPreferences(), loadNotifications()]);
+      })
+      .then(function () {
+        // After everything loads, scroll to the deep-linked post
+        if (deepLinkedPostId && state.expandedPostId === deepLinkedPostId) {
+          setTimeout(function () {
+            var postEl = document.querySelector('[data-expand-id="' + deepLinkedPostId + '"]');
+            if (postEl) {
+              postEl.scrollIntoView({ behavior: "smooth", block: "center" });
+              postEl.classList.add("highlight-flash");
+              setTimeout(function () {
+                postEl.classList.remove("highlight-flash");
+              }, 1500);
+            }
+          }, 200);
+        }
       })
       .catch(function (error) {
         console.error("Portal bootstrap failed", error);
