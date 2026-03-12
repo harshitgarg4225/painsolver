@@ -479,18 +479,16 @@
 
         var name = document.getElementById("signup-name").value;
         var email = document.getElementById("signup-email").value;
-        var companyName = document.getElementById("signup-company").value;
+        var companyName = document.getElementById("signup-company").value.trim();
         var password = document.getElementById("signup-password").value;
+
+        var payload = { name: name, email: email, password: password };
+        if (companyName) { payload.companyName = companyName; }
 
         fetch("/api/auth/signup", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ 
-            name: name, 
-            email: email, 
-            companyName: companyName,
-            password: password 
-          })
+          body: JSON.stringify(payload)
         })
         .then(function(res) { return res.json(); })
         .then(function(data) {

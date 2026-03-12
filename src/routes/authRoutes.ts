@@ -19,8 +19,14 @@ const signupSchema = z.object({
   email: z.string().email(),
   password: z.string().min(8),
   name: z.string().min(1),
-  companyName: z.string().min(1).optional(),
-  companySlug: z.string().min(1).regex(/^[a-z0-9-]+$/).optional()
+  companyName: z.preprocess(
+    (val) => (typeof val === "string" && val.trim() === "" ? undefined : val),
+    z.string().min(1).optional()
+  ),
+  companySlug: z.preprocess(
+    (val) => (typeof val === "string" && val.trim() === "" ? undefined : val),
+    z.string().min(1).regex(/^[a-z0-9-]+$/).optional()
+  )
 });
 
 const loginSchema = z.object({
@@ -71,59 +77,69 @@ function clearSessionCookie(res: any): void {
  * Sign up a new user and company
  */
 authRoutes.post("/signup", async (req, res) => {
-  const parsed = signupSchema.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: "Invalid signup data", details: parsed.error.flatten() });
-    return;
+  try {
+    const parsed = signupSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: "Invalid signup data", details: parsed.error.flatten() });
+      return;
+    }
+
+    const result = await signup(parsed.data);
+
+    if (!result.success) {
+      res.status(400).json({ error: result.error });
+      return;
+    }
+
+    if (result.sessionToken) {
+      setSessionCookie(res, result.sessionToken);
+    }
+
+    res.status(201).json({
+      success: true,
+      user: result.user,
+      requiresVerification: result.requiresVerification
+    });
+  } catch (error) {
+    console.error("Signup route error:", error);
+    res.status(500).json({ error: "An unexpected error occurred. Please try again." });
   }
-
-  const result = await signup(parsed.data);
-
-  if (!result.success) {
-    res.status(400).json({ error: result.error });
-    return;
-  }
-
-  if (result.sessionToken) {
-    setSessionCookie(res, result.sessionToken);
-  }
-
-  res.status(201).json({
-    success: true,
-    user: result.user,
-    requiresVerification: result.requiresVerification
-  });
 });
 
 /**
  * Log in
  */
 authRoutes.post("/login", async (req, res) => {
-  const parsed = loginSchema.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: "Invalid login data" });
-    return;
+  try {
+    const parsed = loginSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: "Invalid login data" });
+      return;
+    }
+
+    const result = await login(parsed.data, {
+      userAgent: req.headers["user-agent"],
+      ip: req.ip || req.headers["x-forwarded-for"]?.toString()
+    });
+
+    if (!result.success) {
+      res.status(401).json({ error: result.error });
+      return;
+    }
+
+    if (result.sessionToken) {
+      setSessionCookie(res, result.sessionToken);
+    }
+
+    res.status(200).json({
+      success: true,
+      user: result.user,
+      requiresVerification: result.requiresVerification
+    });
+  } catch (error) {
+    console.error("Login route error:", error);
+    res.status(500).json({ error: "An unexpected error occurred. Please try again." });
   }
-
-  const result = await login(parsed.data, {
-    userAgent: req.headers["user-agent"],
-    ip: req.ip || req.headers["x-forwarded-for"]?.toString()
-  });
-
-  if (!result.success) {
-    res.status(401).json({ error: result.error });
-    return;
-  }
-
-  if (result.sessionToken) {
-    setSessionCookie(res, result.sessionToken);
-  }
-
-  res.status(200).json({
-    success: true,
-    user: result.user,
-    requiresVerification: result.requiresVerification
-  });
 });
 
 /**
