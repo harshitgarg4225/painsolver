@@ -1655,3 +1655,120 @@ companyRoutes.get("/reporting/trends", async (_req, res) => {
     res.status(500).json({ error: "Failed to load trend data" });
   }
 });
+
+// =============================================
+// API Key Self-Service
+// =============================================
+
+/**
+ * List API keys for this company (never shows the actual key, just metadata)
+ */
+companyRoutes.get("/api-keys", async (req, res) => {
+  const companyId = getCompanyId(req);
+
+  try {
+    const credentials = await prisma.apiCredential.findMany({
+      where: { companyId },
+      orderBy: { createdAt: "desc" },
+      select: {
+        id: true,
+        name: true,
+        isActive: true,
+        scopes: true,
+        createdAt: true,
+        updatedAt: true
+      }
+    });
+
+    res.status(200).json({
+      credentials: credentials.map((c) => ({
+        id: c.id,
+        name: c.name,
+        isActive: c.isActive,
+        scopes: Array.isArray(c.scopes)
+          ? c.scopes.filter((v): v is string => typeof v === "string")
+          : ["*"],
+        createdAt: c.createdAt,
+        updatedAt: c.updatedAt
+      }))
+    });
+  } catch (err: any) {
+    console.error("[api-keys] list error:", err);
+    res.status(500).json({ error: "Failed to list API keys" });
+  }
+});
+
+/**
+ * Create a new API key for this company
+ */
+companyRoutes.post("/api-keys", async (req, res) => {
+  const companyId = getCompanyId(req);
+  const nameSchema = z.object({
+    name: z.string().min(1).max(100).default("API Key"),
+    scopes: z.array(z.string().min(1)).optional()
+  });
+
+  const parsed = nameSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Invalid request", details: parsed.error.flatten() });
+    return;
+  }
+
+  try {
+    const crypto = await import("crypto");
+    const rawKey = `ps_${randomUUID().replace(/-/g, "")}${randomUUID().replace(/-/g, "").slice(0, 16)}`;
+    const keyHash = crypto.createHash("sha256").update(rawKey).digest("hex");
+    const scopes = parsed.data.scopes ?? ["*"];
+
+    await prisma.apiCredential.create({
+      data: {
+        name: parsed.data.name,
+        keyHash,
+        isActive: true,
+        scopes,
+        companyId
+      }
+    });
+
+    // Return the raw key ONLY on creation — it cannot be retrieved later
+    res.status(201).json({
+      apiKey: rawKey,
+      name: parsed.data.name,
+      scopes,
+      message: "Save this key now — it will not be shown again."
+    });
+  } catch (err: any) {
+    console.error("[api-keys] create error:", err);
+    res.status(500).json({ error: "Failed to create API key" });
+  }
+});
+
+/**
+ * Revoke an API key
+ */
+companyRoutes.post("/api-keys/:keyId/revoke", async (req, res) => {
+  const companyId = getCompanyId(req);
+  const { keyId } = req.params;
+
+  try {
+    // Verify the key belongs to this company
+    const credential = await prisma.apiCredential.findFirst({
+      where: { id: keyId, companyId }
+    });
+
+    if (!credential) {
+      res.status(404).json({ error: "API key not found" });
+      return;
+    }
+
+    await prisma.apiCredential.update({
+      where: { id: keyId },
+      data: { isActive: false }
+    });
+
+    res.status(200).json({ ok: true });
+  } catch (err: any) {
+    console.error("[api-keys] revoke error:", err);
+    res.status(500).json({ error: "Failed to revoke API key" });
+  }
+});

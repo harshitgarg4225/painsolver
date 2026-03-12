@@ -85,9 +85,19 @@ app.get("/portal", (_req, res) => {
   const portalPath = path.resolve(process.cwd(), "src/public/portal/index.html");
   res.sendFile(portalPath);
 });
-// Serve portal for deep-linked post URLs: /portal/post/:postId
+// Serve portal scoped to a company slug: /portal/:companySlug
+app.get("/portal/:companySlug", (req, res) => {
+  // Avoid matching static asset paths
+  if (req.params.companySlug === "post") return res.redirect("/portal");
+  const portalPath = path.resolve(process.cwd(), "src/public/portal/index.html");
+  res.sendFile(portalPath);
+});
+// Serve portal for deep-linked post URLs: /portal/:companySlug/post/:postId
+app.get("/portal/:companySlug/post/:postId", (req, res) => {
+  res.redirect(301, `/portal/${encodeURIComponent(req.params.companySlug)}?postId=${encodeURIComponent(req.params.postId)}`);
+});
+// Legacy deep-link: /portal/post/:postId (no company slug)
 app.get("/portal/post/:postId", (req, res) => {
-  // Redirect to /portal?postId=... so the SPA can handle it
   res.redirect(301, `/portal?postId=${encodeURIComponent(req.params.postId)}`);
 });
 

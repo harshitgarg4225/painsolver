@@ -20,7 +20,7 @@ const envSchema = z.object({
   ALLOW_INSECURE_ACTOR_HEADERS: z
     .string()
     .optional()
-    .transform((value) => value !== "false"), // Enabled by default; set to "false" to disable in production
+    .transform((value) => value === "true"), // Disabled by default; set to "true" only for local dev/demo
   AGENT_REQUIRE_IDEMPOTENCY: z
     .string()
     .optional()

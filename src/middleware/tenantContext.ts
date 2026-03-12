@@ -122,7 +122,12 @@ export async function resolveTenantContext(
       }
     }
 
-    // 4. Use actor's company if authenticated
+    // 4. Use actor's company if authenticated (session-based auth)
+    if (!company && req.authUser?.companyId) {
+      company = await findCompanyById(req.authUser.companyId);
+    }
+
+    // 4b. Fallback: use actor's userId to find their company
     if (!company && req.actor?.isAuthenticated && req.actor.userId) {
       try {
         const user = await prisma.user.findUnique({
@@ -141,10 +146,8 @@ export async function resolveTenantContext(
       }
     }
 
-    // 5. Fallback: use first company (demo/single-tenant mode)
-    if (!company) {
-      company = await findFirstCompany();
-    }
+    // 5. NO fallback — each request must have a tenant context
+    // (removed first-company fallback to prevent cross-tenant data leakage)
 
     // Set tenant context if found
     if (company) {

@@ -4,6 +4,16 @@
   var DEFAULT_APP_USER_ID = "portal-user";
   var DEFAULT_SEGMENTS = ["beta", "agency"];
 
+  // Extract company slug from URL path: /portal/:companySlug or /portal/:companySlug?postId=...
+  var COMPANY_SLUG = (function () {
+    var pathParts = window.location.pathname.replace(/\/$/, "").split("/");
+    // URL pattern: /portal/:slug — pathParts = ["", "portal", "slug"]
+    if (pathParts.length >= 3 && pathParts[1] === "portal" && pathParts[2] && pathParts[2] !== "post") {
+      return pathParts[2];
+    }
+    return "";
+  })();
+
   var state = {
     activeTab: "feedback",
     boardId: "",
@@ -491,7 +501,7 @@
   }
 
   function headers() {
-    return {
+    var h = {
       "Content-Type": "application/json",
       "x-painsolver-role": state.isLoggedIn ? "customer" : "anonymous",
       "x-painsolver-auth": state.isLoggedIn ? "true" : "false",
@@ -501,6 +511,11 @@
       "x-painsolver-name": state.isLoggedIn ? state.userName : "",
       "x-painsolver-segments": state.isLoggedIn ? (state.segments || []).join(",") : ""
     };
+    // Include company slug for multi-tenant isolation
+    if (COMPANY_SLUG) {
+      h["x-company-slug"] = COMPANY_SLUG;
+    }
+    return h;
   }
 
   function request(path, options) {

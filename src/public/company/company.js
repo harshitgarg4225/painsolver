@@ -4067,6 +4067,8 @@
     if (tab === "settings") {
       void loadCustomDomains();
       void loadPortalBranding();
+      void loadApiKeys();
+      renderPortalUrl();
     }
 
     if (tab === "changelog") {
@@ -4119,7 +4121,10 @@
     }
     var btnViewPortal = document.getElementById("btn-view-portal");
     if (btnViewPortal) {
-      btnViewPortal.addEventListener("click", function () { window.open("/portal", "_blank"); });
+      btnViewPortal.addEventListener("click", function () {
+        var portalUrl = state.companySlug ? "/portal/" + encodeURIComponent(state.companySlug) : "/portal";
+        window.open(portalUrl, "_blank");
+      });
     }
     var btnViewDocs = document.getElementById("btn-view-docs");
     if (btnViewDocs) {
@@ -6892,6 +6897,48 @@
             });
         });
       }
+
+      // ── API Key events ──
+      var createApiKeyBtn = document.getElementById("create-api-key-btn");
+      if (createApiKeyBtn) {
+        createApiKeyBtn.addEventListener("click", createApiKey);
+      }
+
+      var copyNewApiKeyBtn = document.getElementById("copy-new-api-key");
+      if (copyNewApiKeyBtn) {
+        copyNewApiKeyBtn.addEventListener("click", function () {
+          var val = document.getElementById("new-api-key-value");
+          if (val && val.textContent) {
+            navigator.clipboard.writeText(val.textContent).then(function () {
+              pushToast("success", "API key copied to clipboard");
+            });
+          }
+        });
+      }
+
+      var copyPortalUrlBtn = document.getElementById("copy-portal-url");
+      if (copyPortalUrlBtn) {
+        copyPortalUrlBtn.addEventListener("click", function () {
+          var displayEl = document.getElementById("portal-url-display");
+          if (displayEl && displayEl.textContent) {
+            navigator.clipboard.writeText(displayEl.textContent).then(function () {
+              pushToast("success", "Portal URL copied to clipboard");
+            });
+          }
+        });
+      }
+
+      // Delegate revoke clicks
+      var apiKeysList = document.getElementById("api-keys-list");
+      if (apiKeysList) {
+        apiKeysList.addEventListener("click", function (e) {
+          var btn = e.target.closest("[data-revoke-key-id]");
+          if (btn) {
+            var keyId = btn.getAttribute("data-revoke-key-id");
+            if (keyId) revokeApiKey(keyId);
+          }
+        });
+      }
     }
   }
 
@@ -6937,7 +6984,7 @@
 
   /**
    * Check authentication and load user/company context.
-   * Returns a promise that resolves with auth data or rejects if not authenticated.
+   * Redirects to /auth if not authenticated (production multi-tenant mode).
    */
   function checkAuthAndLoadContext() {
     return fetch("/api/auth/session", { credentials: "same-origin" })
@@ -6952,29 +6999,21 @@
           updateUserMenu(data.user);
           return data;
         } else {
-          // Not authenticated — continue in anonymous/demo mode
-          state.isAuthenticated = false;
-          state.authUser = null;
-          console.log("[PainSolver] No active session — running in demo mode.");
-          // Fetch company context from the session endpoint so we have companyId
-          return fetch("/api/company/session", { credentials: "same-origin" })
-            .then(function (res2) { return res2.json(); })
-            .then(function (sessionData) {
-              if (sessionData.actor) {
-                state.companyId = sessionData.actor.companyId || null;
-                state.companySlug = sessionData.actor.companySlug || null;
-                console.log("[PainSolver] Demo mode — company context:", state.companyId);
-              }
-              return data;
-            })
-            .catch(function () { return data; });
+          // Not authenticated — redirect to login
+          console.log("[PainSolver] No active session — redirecting to login.");
+          window.location.href = "/auth";
+          // Throw to prevent further bootstrap from running
+          throw new Error("Not authenticated");
         }
       })
       .catch(function (err) {
-        // Session check failed (network error etc.) — continue anyway
-        console.warn("[PainSolver] Auth check failed, continuing in demo mode:", err.message);
-        state.isAuthenticated = false;
-        return { authenticated: false };
+        if (err && err.message === "Not authenticated") {
+          throw err; // Re-throw to stop bootstrap
+        }
+        // Session check failed (network error etc.) — redirect to login
+        console.warn("[PainSolver] Auth check failed, redirecting to login:", err.message);
+        window.location.href = "/auth";
+        throw new Error("Not authenticated");
       });
   }
 
@@ -6999,6 +7038,106 @@
       .catch(function () {
         window.location.href = "/auth";
       });
+  }
+
+  // ── API Key Self-Service ──
+  function loadApiKeys() {
+    var listEl = document.getElementById("api-keys-list");
+    if (!listEl) return Promise.resolve();
+
+    listEl.innerHTML = '<p class="muted">Loading keys...</p>';
+
+    return fetch("/api/company/api-keys", {
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json" }
+    })
+      .then(function (res) { return res.json(); })
+      .then(function (data) {
+        var creds = data.credentials || [];
+        if (!creds.length) {
+          listEl.innerHTML = '<p class="muted">No API keys yet. Generate one above.</p>';
+          return;
+        }
+        listEl.innerHTML = creds.map(function (c) {
+          var scopeStr = (c.scopes || ["*"]).join(", ");
+          var statusClass = c.isActive ? "api-key-active" : "api-key-revoked";
+          var statusLabel = c.isActive ? "Active" : "Revoked";
+          var revokeBtn = c.isActive
+            ? '<button class="ghost small" data-revoke-key-id="' + esc(c.id) + '" type="button" style="color:var(--error);"><span class="ms" style="font-size:15px;">block</span> Revoke</button>'
+            : '';
+          return (
+            '<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--line);">' +
+            '<div>' +
+            '<strong>' + esc(c.name) + '</strong>' +
+            '<span class="' + statusClass + '" style="margin-left:8px;font-size:12px;padding:2px 8px;border-radius:4px;' +
+            (c.isActive ? 'background:rgba(16,185,129,0.1);color:#10b981;' : 'background:rgba(239,68,68,0.1);color:#ef4444;') +
+            '">' + statusLabel + '</span>' +
+            '<div class="muted" style="font-size:12px;margin-top:2px;">Scopes: ' + esc(scopeStr) + ' · Created: ' + new Date(c.createdAt).toLocaleDateString() + '</div>' +
+            '</div>' +
+            '<div>' + revokeBtn + '</div>' +
+            '</div>'
+          );
+        }).join("");
+      })
+      .catch(function (err) {
+        listEl.innerHTML = '<p class="muted" style="color:var(--error);">Failed to load API keys.</p>';
+        console.error("[api-keys] load error:", err);
+      });
+  }
+
+  function createApiKey() {
+    var nameInput = document.getElementById("new-api-key-name");
+    var name = (nameInput && nameInput.value || "").trim() || "API Key";
+    var banner = document.getElementById("new-api-key-banner");
+    var valueEl = document.getElementById("new-api-key-value");
+
+    return fetch("/api/company/api-keys", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: name })
+    })
+      .then(function (res) { return res.json(); })
+      .then(function (data) {
+        if (data.apiKey) {
+          if (valueEl) valueEl.textContent = data.apiKey;
+          if (banner) banner.style.display = "block";
+          if (nameInput) nameInput.value = "";
+          loadApiKeys();
+        } else {
+          alert(data.error || "Failed to create API key");
+        }
+      })
+      .catch(function (err) {
+        alert("Failed to create API key: " + err.message);
+      });
+  }
+
+  function revokeApiKey(keyId) {
+    if (!confirm("Revoke this API key? This cannot be undone.")) return;
+
+    return fetch("/api/company/api-keys/" + keyId + "/revoke", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json" }
+    })
+      .then(function (res) { return res.json(); })
+      .then(function () {
+        loadApiKeys();
+      })
+      .catch(function (err) {
+        alert("Failed to revoke key: " + err.message);
+      });
+  }
+
+  function renderPortalUrl() {
+    var displayEl = document.getElementById("portal-url-display");
+    if (!displayEl) return;
+
+    var baseUrl = window.location.origin;
+    var slug = state.companySlug;
+    var url = slug ? baseUrl + "/portal/" + encodeURIComponent(slug) : baseUrl + "/portal";
+    displayEl.textContent = url;
   }
 
   function bootstrap() {
