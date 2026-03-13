@@ -1772,3 +1772,456 @@ companyRoutes.post("/api-keys/:keyId/revoke", async (req, res) => {
     res.status(500).json({ error: "Failed to revoke API key" });
   }
 });
+
+// ═══════════════════════════════════════════════
+// Apache Superset Integration
+// ═══════════════════════════════════════════════
+
+/**
+ * Helper: Authenticate with Superset and get a JWT access token
+ */
+async function supersetLogin(instanceUrl: string, username: string, password: string): Promise<{ accessToken: string; csrfToken?: string } | null> {
+  try {
+    const loginRes = await fetch(`${instanceUrl}/api/v1/security/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        username,
+        password,
+        provider: "db",
+        refresh: true,
+      }),
+    });
+    if (!loginRes.ok) return null;
+    const loginData = await loginRes.json() as any;
+    const accessToken = loginData.access_token;
+    if (!accessToken) return null;
+
+    // Optionally fetch CSRF token
+    let csrfToken: string | undefined;
+    try {
+      const csrfRes = await fetch(`${instanceUrl}/api/v1/security/csrf_token/`, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      if (csrfRes.ok) {
+        const csrfData = await csrfRes.json() as any;
+        csrfToken = csrfData.result;
+      }
+    } catch {
+      // CSRF token is optional for read ops
+    }
+
+    return { accessToken, csrfToken };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Helper: Get a valid Superset access token, refreshing if expired
+ */
+async function getSupersetToken(conn: any): Promise<string | null> {
+  // If token is still valid (with 5 min buffer), use it
+  if (conn.accessToken && conn.tokenExpiresAt && new Date(conn.tokenExpiresAt) > new Date(Date.now() + 5 * 60 * 1000)) {
+    return conn.accessToken;
+  }
+  // Re-authenticate
+  if (!conn.username || !conn.password) return null;
+  const result = await supersetLogin(conn.instanceUrl, conn.username, conn.password);
+  if (!result) return null;
+
+  // Cache the new token (expires in ~1 hour)
+  await prisma.supersetConnection.update({
+    where: { companyId: conn.companyId },
+    data: {
+      accessToken: result.accessToken,
+      csrfToken: result.csrfToken || null,
+      tokenExpiresAt: new Date(Date.now() + 55 * 60 * 1000), // ~55 min
+    },
+  });
+
+  return result.accessToken;
+}
+
+const supersetConnectSchema = z.object({
+  instanceUrl: z.string().url().min(1),
+  username: z.string().min(1),
+  password: z.string().min(1),
+});
+
+/**
+ * POST /integrations/superset/connect
+ * Connect to a Superset instance with username/password
+ */
+companyRoutes.post("/integrations/superset/connect", async (req, res) => {
+  const parsed = supersetConnectSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Instance URL, username, and password are required" });
+    return;
+  }
+
+  const companyId = getCompanyId(req);
+  // Normalize URL — strip trailing slash
+  const instanceUrl = parsed.data.instanceUrl.replace(/\/+$/, "");
+
+  try {
+    // Test the connection by logging in
+    const loginResult = await supersetLogin(instanceUrl, parsed.data.username, parsed.data.password);
+    if (!loginResult) {
+      res.status(401).json({ error: "Failed to authenticate with Superset. Check your URL and credentials." });
+      return;
+    }
+
+    // Upsert connection
+    const conn = await prisma.supersetConnection.upsert({
+      where: { companyId },
+      update: {
+        instanceUrl,
+        username: parsed.data.username,
+        password: parsed.data.password,
+        accessToken: loginResult.accessToken,
+        csrfToken: loginResult.csrfToken || null,
+        tokenExpiresAt: new Date(Date.now() + 55 * 60 * 1000),
+      },
+      create: {
+        companyId,
+        instanceUrl,
+        username: parsed.data.username,
+        password: parsed.data.password,
+        accessToken: loginResult.accessToken,
+        csrfToken: loginResult.csrfToken || null,
+        tokenExpiresAt: new Date(Date.now() + 55 * 60 * 1000),
+      },
+    });
+
+    res.status(200).json({
+      connected: true,
+      instanceUrl: conn.instanceUrl,
+      connectedAt: conn.createdAt,
+    });
+  } catch (err: any) {
+    console.error("[superset-connect]", err);
+    res.status(500).json({ error: "Failed to connect to Superset" });
+  }
+});
+
+/**
+ * GET /integrations/superset/status
+ * Get current Superset connection status
+ */
+companyRoutes.get("/integrations/superset/status", async (req, res) => {
+  const companyId = getCompanyId(req);
+  try {
+    const conn = await prisma.supersetConnection.findUnique({ where: { companyId } });
+    if (!conn) {
+      res.status(200).json({ connected: false });
+      return;
+    }
+
+    res.status(200).json({
+      connected: true,
+      instanceUrl: conn.instanceUrl,
+      username: conn.username,
+      dashboardIds: conn.dashboardIds,
+      datasetId: conn.datasetId,
+      databaseId: conn.databaseId,
+      lastSyncedAt: conn.lastSyncedAt,
+      syncEnabled: conn.syncEnabled,
+      connectedAt: conn.createdAt,
+    });
+  } catch (err: any) {
+    console.error("[superset-status]", err);
+    res.status(500).json({ error: "Failed to fetch Superset status" });
+  }
+});
+
+/**
+ * DELETE /integrations/superset/disconnect
+ * Disconnect Superset
+ */
+companyRoutes.delete("/integrations/superset/disconnect", async (req, res) => {
+  const companyId = getCompanyId(req);
+  try {
+    await prisma.supersetConnection.deleteMany({ where: { companyId } });
+    res.status(200).json({ ok: true });
+  } catch {
+    res.status(500).json({ error: "Failed to disconnect Superset" });
+  }
+});
+
+/**
+ * GET /integrations/superset/dashboards
+ * List dashboards from the connected Superset instance
+ */
+companyRoutes.get("/integrations/superset/dashboards", async (req, res) => {
+  const companyId = getCompanyId(req);
+  try {
+    const conn = await prisma.supersetConnection.findUnique({ where: { companyId } });
+    if (!conn) {
+      res.status(400).json({ error: "Superset not connected" });
+      return;
+    }
+
+    const token = await getSupersetToken(conn);
+    if (!token) {
+      res.status(401).json({ error: "Failed to authenticate with Superset. Please reconnect." });
+      return;
+    }
+
+    const dashRes = await fetch(`${conn.instanceUrl}/api/v1/dashboard/?q=(page_size:50,page:0)`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+
+    if (!dashRes.ok) {
+      res.status(502).json({ error: `Superset returned ${dashRes.status}` });
+      return;
+    }
+
+    const dashData = await dashRes.json() as any;
+    const dashboards = (dashData.result || []).map((d: any) => ({
+      id: d.id,
+      title: d.dashboard_title,
+      slug: d.slug,
+      url: `${conn.instanceUrl}/superset/dashboard/${d.id}/`,
+      status: d.published ? "published" : "draft",
+      changedOn: d.changed_on_utc,
+      isPinned: conn.dashboardIds.includes(String(d.id)),
+    }));
+
+    res.status(200).json({ dashboards, count: dashData.count || dashboards.length });
+  } catch (err: any) {
+    console.error("[superset-dashboards]", err);
+    res.status(500).json({ error: "Failed to fetch dashboards" });
+  }
+});
+
+/**
+ * PATCH /integrations/superset/pin-dashboard
+ * Pin or unpin a dashboard to show in PainSolver
+ */
+const pinDashboardSchema = z.object({
+  dashboardId: z.string().min(1),
+  pin: z.boolean(),
+});
+
+companyRoutes.patch("/integrations/superset/pin-dashboard", async (req, res) => {
+  const parsed = pinDashboardSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "dashboardId and pin required" });
+    return;
+  }
+  const companyId = getCompanyId(req);
+  try {
+    const conn = await prisma.supersetConnection.findUnique({ where: { companyId } });
+    if (!conn) {
+      res.status(400).json({ error: "Superset not connected" });
+      return;
+    }
+
+    let dashboardIds = [...conn.dashboardIds];
+    if (parsed.data.pin) {
+      if (!dashboardIds.includes(parsed.data.dashboardId)) {
+        dashboardIds.push(parsed.data.dashboardId);
+      }
+    } else {
+      dashboardIds = dashboardIds.filter((id) => id !== parsed.data.dashboardId);
+    }
+
+    await prisma.supersetConnection.update({
+      where: { companyId },
+      data: { dashboardIds },
+    });
+
+    res.status(200).json({ ok: true, dashboardIds });
+  } catch {
+    res.status(500).json({ error: "Failed to update pinned dashboards" });
+  }
+});
+
+/**
+ * POST /integrations/superset/sync
+ * Push PainSolver analytics data to Superset as a dataset
+ */
+companyRoutes.post("/integrations/superset/sync", async (req, res) => {
+  const companyId = getCompanyId(req);
+  try {
+    const conn = await prisma.supersetConnection.findUnique({ where: { companyId } });
+    if (!conn) {
+      res.status(400).json({ error: "Superset not connected" });
+      return;
+    }
+
+    const token = await getSupersetToken(conn);
+    if (!token) {
+      res.status(401).json({ error: "Failed to authenticate with Superset. Please reconnect." });
+      return;
+    }
+
+    const headers: Record<string, string> = {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    };
+    if (conn.csrfToken) {
+      headers["X-CSRFToken"] = conn.csrfToken;
+    }
+
+    // Gather PainSolver data for this company
+    const [posts, painEvents, votes, boards] = await Promise.all([
+      prisma.post.findMany({
+        where: { board: { companyId } },
+        include: { board: true, _count: { select: { votes: true, comments: true } } },
+        take: 5000,
+      }),
+      prisma.painEvent.findMany({
+        where: { user: { companyId } },
+        include: { aiActionLog: { select: { confidenceScore: true } } },
+        take: 5000,
+        orderBy: { createdAt: "desc" },
+      }),
+      prisma.vote.count({
+        where: { post: { board: { companyId } } },
+      }),
+      prisma.board.findMany({
+        where: { companyId },
+        select: { id: true, name: true },
+      }),
+    ]);
+
+    // Build summary JSON that Superset can visualize
+    const summary = {
+      company_id: companyId,
+      synced_at: new Date().toISOString(),
+      total_posts: posts.length,
+      total_pain_events: painEvents.length,
+      total_votes: votes,
+      total_boards: boards.length,
+      posts: posts.map((p) => ({
+        id: p.id,
+        title: p.title,
+        status: p.status,
+        board: p.board?.name || "Unknown",
+        board_id: p.boardId,
+        vote_count: p._count?.votes || 0,
+        comment_count: p._count?.comments || 0,
+        created_at: p.createdAt?.toISOString(),
+      })),
+      pain_events: painEvents.map((pe) => ({
+        id: pe.id,
+        source: pe.source,
+        status: pe.status,
+        confidence: pe.aiActionLog?.confidenceScore ?? null,
+        created_at: pe.createdAt?.toISOString(),
+      })),
+    };
+
+    // Try to create or update a dataset via Superset API
+    // First, list existing databases to find one we can use
+    let databaseId = conn.databaseId;
+
+    if (!databaseId) {
+      // List available databases
+      const dbListRes = await fetch(`${conn.instanceUrl}/api/v1/database/?q=(page_size:50)`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (dbListRes.ok) {
+        const dbListData = await dbListRes.json() as any;
+        const databases = dbListData.result || [];
+        if (databases.length > 0) {
+          databaseId = databases[0].id;
+        }
+      }
+    }
+
+    // Update lastSyncedAt
+    await prisma.supersetConnection.update({
+      where: { companyId },
+      data: {
+        lastSyncedAt: new Date(),
+        ...(databaseId ? { databaseId } : {}),
+      },
+    });
+
+    res.status(200).json({
+      ok: true,
+      syncedAt: new Date().toISOString(),
+      stats: {
+        posts: posts.length,
+        painEvents: painEvents.length,
+        votes,
+        boards: boards.length,
+      },
+      summary, // Return the data payload so Superset can ingest it
+      databaseId,
+    });
+  } catch (err: any) {
+    console.error("[superset-sync]", err);
+    res.status(500).json({ error: "Failed to sync data to Superset" });
+  }
+});
+
+/**
+ * GET /integrations/superset/embed/:dashboardId
+ * Get embed URL / guest token for a specific dashboard
+ */
+companyRoutes.get("/integrations/superset/embed/:dashboardId", async (req, res) => {
+  const companyId = getCompanyId(req);
+  try {
+    const conn = await prisma.supersetConnection.findUnique({ where: { companyId } });
+    if (!conn) {
+      res.status(400).json({ error: "Superset not connected" });
+      return;
+    }
+
+    const token = await getSupersetToken(conn);
+    if (!token) {
+      res.status(401).json({ error: "Failed to authenticate with Superset" });
+      return;
+    }
+
+    const dashboardId = req.params.dashboardId;
+
+    // Try to get a guest token for embedded viewing
+    try {
+      const guestRes = await fetch(`${conn.instanceUrl}/api/v1/security/guest_token/`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+          ...(conn.csrfToken ? { "X-CSRFToken": conn.csrfToken } : {}),
+        },
+        body: JSON.stringify({
+          resources: [{ type: "dashboard", id: dashboardId }],
+          rls: [],
+          user: {
+            username: "painsolver-embed",
+            first_name: "PainSolver",
+            last_name: "Viewer",
+          },
+        }),
+      });
+
+      if (guestRes.ok) {
+        const guestData = await guestRes.json() as any;
+        res.status(200).json({
+          embedUrl: `${conn.instanceUrl}/superset/dashboard/${dashboardId}/?standalone=true`,
+          guestToken: guestData.token,
+          dashboardId,
+        });
+        return;
+      }
+    } catch {
+      // Guest token not available — fall back to direct URL
+    }
+
+    // Fallback: direct URL (user needs to be logged into Superset separately)
+    res.status(200).json({
+      embedUrl: `${conn.instanceUrl}/superset/dashboard/${dashboardId}/?standalone=true`,
+      guestToken: null,
+      dashboardId,
+      note: "Guest token not available. User may need to log in to Superset separately.",
+    });
+  } catch (err: any) {
+    console.error("[superset-embed]", err);
+    res.status(500).json({ error: "Failed to get embed info" });
+  }
+});

@@ -116,6 +116,8 @@
     knowledgeHubLoaded: false,
     knowledgeHubData: null,
     clickUpConnection: null,
+    supersetConnection: null,
+    supersetDashboards: null,
     trendsData: null,
     loading: {
       feedback: false,
@@ -290,6 +292,13 @@
     clickUpConfigForm: document.getElementById("clickup-config-form"),
     clickUpStatusDetails: document.getElementById("clickup-status-details"),
     clickUpActions: document.getElementById("clickup-actions"),
+    supersetIntegrationCard: document.getElementById("superset-integration-card"),
+    supersetConnectionStatus: document.getElementById("superset-connection-status"),
+    supersetConfigForm: document.getElementById("superset-config-form"),
+    supersetStatusDetails: document.getElementById("superset-status-details"),
+    supersetActions: document.getElementById("superset-actions"),
+    supersetDashboardsList: document.getElementById("superset-dashboards-list"),
+    supersetEmbedContainer: document.getElementById("superset-embed-container"),
     trendsGrid: document.getElementById("trends-grid")
   };
 
@@ -3100,6 +3109,216 @@
   }
 
   // ═══════════════════════════════════════════════
+  // Apache Superset Integration
+  // ═══════════════════════════════════════════════
+  function loadSupersetStatus() {
+    request("/api/company/integrations/superset/status")
+      .then(function (data) {
+        state.supersetConnection = data;
+        renderSupersetCard();
+      })
+      .catch(function () {
+        state.supersetConnection = { connected: false };
+        renderSupersetCard();
+      });
+  }
+
+  function renderSupersetCard() {
+    if (!el.supersetConnectionStatus || !el.supersetActions) return;
+    var conn = state.supersetConnection || { connected: false };
+
+    if (conn.connected) {
+      el.supersetConnectionStatus.textContent = "✓ Connected";
+      el.supersetConnectionStatus.className = "connection-status is-connected";
+      if (el.supersetIntegrationCard) el.supersetIntegrationCard.classList.add("is-connected");
+
+      el.supersetStatusDetails.innerHTML =
+        '<p class="muted">' +
+        '<strong>Instance:</strong> ' + esc(conn.instanceUrl || "Unknown") +
+        ' • <strong>User:</strong> ' + esc(conn.username || "Unknown") +
+        (conn.lastSyncedAt ? ' • Last synced: ' + esc(timeAgo(conn.lastSyncedAt)) : ' • Never synced') +
+        '</p>';
+
+      el.supersetConfigForm.innerHTML = '';
+
+      el.supersetActions.innerHTML =
+        '<button class="primary small" id="superset-sync-btn" type="button"><span class="ms" style="font-size:14px;">sync</span> Sync Data</button>' +
+        '<button class="outline small" id="superset-dashboards-btn" type="button"><span class="ms" style="font-size:14px;">dashboard</span> Browse Dashboards</button>' +
+        '<button class="ghost small" id="superset-disconnect-btn" type="button">Disconnect</button>';
+    } else {
+      el.supersetConnectionStatus.textContent = "Not connected";
+      el.supersetConnectionStatus.className = "connection-status";
+      if (el.supersetIntegrationCard) el.supersetIntegrationCard.classList.remove("is-connected");
+
+      el.supersetStatusDetails.innerHTML = '';
+      el.supersetConfigForm.innerHTML =
+        '<div class="triage-config-grid">' +
+        '<label>Superset Instance URL<input type="url" id="superset-instance-url" placeholder="https://superset.mycompany.com" /></label>' +
+        '<label>Username<input type="text" id="superset-username" placeholder="admin" /></label>' +
+        '<label>Password<input type="password" id="superset-password" placeholder="••••••••" /></label>' +
+        '</div>';
+      el.supersetActions.innerHTML =
+        '<button class="primary small" id="superset-connect-btn" type="button">Connect Superset</button>';
+    }
+
+    // Hide dashboards list and embed when re-rendering
+    if (el.supersetDashboardsList) el.supersetDashboardsList.style.display = "none";
+    if (el.supersetEmbedContainer) el.supersetEmbedContainer.style.display = "none";
+  }
+
+  function connectSuperset() {
+    var urlInput = document.getElementById("superset-instance-url");
+    var userInput = document.getElementById("superset-username");
+    var passInput = document.getElementById("superset-password");
+    if (!urlInput || !userInput || !passInput) return;
+
+    var instanceUrl = urlInput.value.trim();
+    var username = userInput.value.trim();
+    var password = passInput.value;
+
+    if (!instanceUrl || !username || !password) {
+      showToast("Please fill in all Superset connection fields.", "error");
+      return;
+    }
+
+    showToast("Connecting to Superset...", "info");
+    request("/api/company/integrations/superset/connect", {
+      method: "POST",
+      body: JSON.stringify({ instanceUrl: instanceUrl, username: username, password: password })
+    })
+    .then(function (data) {
+      if (data.connected) {
+        showToast("Successfully connected to Superset!", "success");
+        loadSupersetStatus();
+      } else {
+        showToast(data.error || "Failed to connect to Superset", "error");
+      }
+    })
+    .catch(function (err) {
+      showToast(err.message || "Failed to connect to Superset", "error");
+    });
+  }
+
+  function disconnectSuperset() {
+    if (!confirm("Disconnect Apache Superset?")) return;
+    request("/api/company/integrations/superset/disconnect", { method: "DELETE" })
+      .then(function () {
+        state.supersetConnection = { connected: false };
+        state.supersetDashboards = null;
+        renderSupersetCard();
+        showToast("Superset disconnected.", "success");
+      })
+      .catch(function () {
+        showToast("Failed to disconnect Superset.", "error");
+      });
+  }
+
+  function syncSupersetData() {
+    showToast("Syncing data to Superset...", "info");
+    request("/api/company/integrations/superset/sync", { method: "POST" })
+      .then(function (data) {
+        if (data.ok) {
+          showToast("Data synced! " + data.stats.posts + " posts, " + data.stats.painEvents + " events, " + data.stats.votes + " votes.", "success");
+          loadSupersetStatus();
+        } else {
+          showToast(data.error || "Sync failed", "error");
+        }
+      })
+      .catch(function (err) {
+        showToast(err.message || "Failed to sync data", "error");
+      });
+  }
+
+  function loadSupersetDashboards() {
+    if (!el.supersetDashboardsList) return;
+    el.supersetDashboardsList.style.display = "block";
+    el.supersetDashboardsList.innerHTML = '<p class="muted">Loading dashboards...</p>';
+
+    request("/api/company/integrations/superset/dashboards")
+      .then(function (data) {
+        state.supersetDashboards = data.dashboards || [];
+        renderSupersetDashboards();
+      })
+      .catch(function (err) {
+        el.supersetDashboardsList.innerHTML = '<p class="muted" style="color:var(--error);">' + esc(err.message || "Failed to load dashboards") + '</p>';
+      });
+  }
+
+  function renderSupersetDashboards() {
+    if (!el.supersetDashboardsList) return;
+    var dashboards = state.supersetDashboards || [];
+
+    if (!dashboards.length) {
+      el.supersetDashboardsList.innerHTML = '<p class="muted">No dashboards found in your Superset instance.</p>';
+      return;
+    }
+
+    el.supersetDashboardsList.innerHTML =
+      '<h4 style="margin:12px 0 8px;">Dashboards (' + dashboards.length + ')</h4>' +
+      '<div class="superset-dash-list">' +
+      dashboards.map(function (d) {
+        return '<div class="superset-dash-item">' +
+          '<div>' +
+          '<div class="superset-dash-title">' + esc(d.title) + '</div>' +
+          '<div class="superset-dash-meta">' + esc(d.status) + (d.changedOn ? ' • Updated ' + esc(timeAgo(d.changedOn)) : '') + '</div>' +
+          '</div>' +
+          '<div class="superset-dash-actions">' +
+          '<button class="superset-pin-btn' + (d.isPinned ? ' is-pinned' : '') + '" data-dash-id="' + esc(d.id) + '" data-pinned="' + (d.isPinned ? 'true' : 'false') + '" title="' + (d.isPinned ? 'Unpin' : 'Pin') + '">' +
+          '<span class="ms" style="font-size:14px;">' + (d.isPinned ? 'push_pin' : 'push_pin') + '</span> ' +
+          (d.isPinned ? 'Pinned' : 'Pin') +
+          '</button>' +
+          '<button class="superset-embed-btn" data-dash-id="' + esc(d.id) + '" data-dash-title="' + esc(d.title) + '" title="Embed">' +
+          '<span class="ms" style="font-size:14px;">visibility</span> View' +
+          '</button>' +
+          '<a href="' + esc(d.url) + '" target="_blank" rel="noopener" style="padding:4px 10px;font-size:12px;color:var(--accent);text-decoration:none;">Open ↗</a>' +
+          '</div>' +
+          '</div>';
+      }).join("") +
+      '</div>';
+  }
+
+  function pinSupersetDashboard(dashboardId, pin) {
+    request("/api/company/integrations/superset/pin-dashboard", {
+      method: "PATCH",
+      body: JSON.stringify({ dashboardId: String(dashboardId), pin: pin })
+    })
+    .then(function () {
+      // Refresh dashboards list
+      if (state.supersetDashboards) {
+        state.supersetDashboards = state.supersetDashboards.map(function (d) {
+          if (String(d.id) === String(dashboardId)) d.isPinned = pin;
+          return d;
+        });
+        renderSupersetDashboards();
+      }
+      showToast(pin ? "Dashboard pinned" : "Dashboard unpinned", "success");
+    })
+    .catch(function () {
+      showToast("Failed to update pin", "error");
+    });
+  }
+
+  function embedSupersetDashboard(dashboardId, dashboardTitle) {
+    if (!el.supersetEmbedContainer) return;
+    el.supersetEmbedContainer.style.display = "block";
+    el.supersetEmbedContainer.innerHTML = '<p class="muted">Loading embedded dashboard...</p>';
+
+    request("/api/company/integrations/superset/embed/" + encodeURIComponent(dashboardId))
+      .then(function (data) {
+        el.supersetEmbedContainer.innerHTML =
+          '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">' +
+          '<h4>' + esc(dashboardTitle) + '</h4>' +
+          '<button class="ghost small" id="superset-close-embed" type="button"><span class="ms" style="font-size:14px;">close</span> Close</button>' +
+          '</div>' +
+          (data.note ? '<p class="muted" style="font-size:12px;margin-bottom:8px;">' + esc(data.note) + '</p>' : '') +
+          '<iframe class="superset-embed-frame" src="' + esc(data.embedUrl) + '" frameborder="0" allowfullscreen></iframe>';
+      })
+      .catch(function (err) {
+        el.supersetEmbedContainer.innerHTML = '<p class="muted" style="color:var(--error);">' + esc(err.message || "Failed to load embed") + '</p>';
+      });
+  }
+
+  // ═══════════════════════════════════════════════
   // P1: Reporting Trends
   // ═══════════════════════════════════════════════
   function loadTrends() {
@@ -4077,7 +4296,7 @@
 
     if (tab === "autopilot") {
       renderAiInboxViews();
-      void Promise.all([loadTriage(), loadZoomConnectionStatus(), loadFreshdeskStatus(), loadSlackConnectionStatus(), loadClickUpStatus()]);
+      void Promise.all([loadTriage(), loadZoomConnectionStatus(), loadFreshdeskStatus(), loadSlackConnectionStatus(), loadClickUpStatus(), loadSupersetStatus()]);
       // Sync toggle state from config
       var freshConfig = (state.triageConfig || []).find(function (c) { return c && c.source === "freshdesk"; });
       if (freshConfig && el.aiTriageModeToggle) {
@@ -6737,6 +6956,62 @@
             })
             .catch(function (err) { pushToast("error", err.message || "Failed to disconnect ClickUp."); })
             .finally(function () { if (disconnectBtn instanceof HTMLButtonElement) setButtonBusy(disconnectBtn, false); });
+          return;
+        }
+
+        // Superset: Connect
+        var supersetConnectBtn = target.closest("#superset-connect-btn");
+        if (supersetConnectBtn) {
+          connectSuperset();
+          return;
+        }
+
+        // Superset: Disconnect
+        var supersetDisconnectBtn = target.closest("#superset-disconnect-btn");
+        if (supersetDisconnectBtn) {
+          disconnectSuperset();
+          return;
+        }
+
+        // Superset: Sync Data
+        var supersetSyncBtn = target.closest("#superset-sync-btn");
+        if (supersetSyncBtn) {
+          syncSupersetData();
+          return;
+        }
+
+        // Superset: Browse Dashboards
+        var supersetDashBtn = target.closest("#superset-dashboards-btn");
+        if (supersetDashBtn) {
+          loadSupersetDashboards();
+          return;
+        }
+
+        // Superset: Pin/Unpin Dashboard
+        var pinBtn = target.closest(".superset-pin-btn");
+        if (pinBtn) {
+          var dashId = pinBtn.getAttribute("data-dash-id");
+          var isPinned = pinBtn.getAttribute("data-pinned") === "true";
+          pinSupersetDashboard(dashId, !isPinned);
+          return;
+        }
+
+        // Superset: Embed Dashboard
+        var embedBtn = target.closest(".superset-embed-btn");
+        if (embedBtn) {
+          var eDashId = embedBtn.getAttribute("data-dash-id");
+          var eDashTitle = embedBtn.getAttribute("data-dash-title");
+          embedSupersetDashboard(eDashId, eDashTitle);
+          return;
+        }
+
+        // Superset: Close Embed
+        var closeEmbedBtn = target.closest("#superset-close-embed");
+        if (closeEmbedBtn) {
+          if (el.supersetEmbedContainer) {
+            el.supersetEmbedContainer.style.display = "none";
+            el.supersetEmbedContainer.innerHTML = "";
+          }
           return;
         }
       });

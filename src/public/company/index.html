@@ -689,6 +689,44 @@
                 <div class="integration-status" id="clickup-status-details"></div>
                 <div class="integration-actions" id="clickup-actions"></div>
               </article>
+
+              <!-- Apache Superset Integration Card -->
+              <article class="integration-card" id="superset-integration-card">
+                <div class="integration-header">
+                  <div class="integration-icon superset-icon">
+                    <span class="ms">bar_chart</span>
+                  </div>
+                  <div class="integration-title">
+                    <h4>Apache Superset</h4>
+                    <span class="connection-status" id="superset-connection-status">Not connected</span>
+                  </div>
+                </div>
+                <p class="integration-desc">Connect your Superset instance to visualize PainSolver data. Sync feedback metrics, browse dashboards, and embed charts directly.</p>
+                <div class="integration-flow">
+                  <div class="flow-step"><span class="ms">database</span> Data synced</div>
+                  <span class="flow-arrow">→</span>
+                  <div class="flow-step"><span class="ms">query_stats</span> Dataset created</div>
+                  <span class="flow-arrow">→</span>
+                  <div class="flow-step"><span class="ms">dashboard</span> Dashboards</div>
+                  <span class="flow-arrow">→</span>
+                  <div class="flow-step"><span class="ms">visibility</span> Embed &amp; view</div>
+                </div>
+                <div class="integration-config" id="superset-config-form">
+                  <!-- Populated by JS -->
+                </div>
+                <div class="integration-status" id="superset-status-details">
+                  <!-- Populated by JS -->
+                </div>
+                <div class="integration-actions" id="superset-actions">
+                  <!-- Populated by JS -->
+                </div>
+                <div id="superset-dashboards-list" style="display:none;">
+                  <!-- Populated by JS when dashboards are loaded -->
+                </div>
+                <div id="superset-embed-container" style="display:none;">
+                  <!-- Iframe for embedded dashboard -->
+                </div>
+              </article>
             </div>
             <!-- Legacy config list for routing settings -->
             <div id="triage-config-list" class="triage-config-list" style="display:none;"></div>

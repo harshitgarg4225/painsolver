@@ -3858,6 +3858,70 @@ input:checked + .slider:before {
 .clickup-icon {
   background-color: #7b68ee !important;
 }
+.superset-icon {
+  background: linear-gradient(135deg, #1fa7c9, #44c2a7) !important;
+}
+
+/* Superset embed container */
+.superset-embed-frame {
+  width: 100%;
+  height: 520px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  margin-top: 12px;
+  background: var(--bg);
+}
+.superset-dash-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 12px;
+}
+.superset-dash-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  background: var(--surface-light);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font-size: 13px;
+  transition: border-color 0.2s;
+}
+.superset-dash-item:hover {
+  border-color: var(--accent);
+}
+.superset-dash-title {
+  font-weight: 500;
+  color: var(--text);
+}
+.superset-dash-meta {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+.superset-dash-actions {
+  display: flex;
+  gap: 6px;
+}
+.superset-dash-actions button {
+  padding: 4px 10px;
+  font-size: 12px;
+  border-radius: 5px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.superset-dash-actions button:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.superset-dash-actions button.is-pinned {
+  background: var(--primary);
+  color: white;
+  border-color: var(--primary);
+}
 
 /* ═══════════════════════════════════════════════
    P1: Knowledge Hub

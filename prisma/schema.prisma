@@ -572,6 +572,30 @@ model ClickUpTaskLink {
   @@index([clickUpTaskId])
 }
 
+// ============================================
+// Apache Superset Integration
+// ============================================
+model SupersetConnection {
+  id               String   @id @default(cuid())
+  companyId        String
+  instanceUrl      String   // e.g. https://superset.mycompany.com
+  username         String?
+  password         String?  @db.Text
+  accessToken      String?  @db.Text  // Cached JWT from Superset
+  csrfToken        String?  @db.Text
+  tokenExpiresAt   DateTime?
+  dashboardIds     String[] @default([])  // Pinned dashboard IDs
+  datasetId        Int?     // PainSolver dataset ID in Superset
+  databaseId       Int?     // PainSolver database connection ID in Superset
+  lastSyncedAt     DateTime?
+  syncEnabled      Boolean  @default(true)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@unique([companyId])
+  @@index([companyId])
+}
+
 model UploadedFile {
   id          String   @id @default(cuid())
   filename    String
